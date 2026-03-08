@@ -2,15 +2,22 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Productos - D&J Beauty Studio</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" href="https://i.imgur.com/Kz8qfG3.png" type="image/png">
 </head>
 <body>
 
+    <div class="promo-bar">Nuevos tonos cada semana | Compra 2 y lleva envio gratis</div>
+
     <header>
         <div class="logo-container">
-            <img src="https://i.imgur.com/Kz8qfG3.png" alt="Logo D&J Beauty Studio" style="width: 150px;">
+            <img src="https://i.imgur.com/Kz8qfG3.png" alt="Logo D&J Beauty Studio">
+            <div class="brand-copy">
+                <h3>D&J Beauty Studio</h3>
+                <p>Colecciones irresistibles para una belleza que se nota.</p>
+            </div>
         </div>
     </header>
 
@@ -23,14 +30,35 @@
     </nav>
 
     <div class="container">
-        <h2>Nuestros Productos Exclusivos</h2>
-        
+        <section class="hero fade-up">
+            <div class="hero-grid">
+                <div>
+                    <p class="eyebrow">Catalogo Oficial</p>
+                    <h1>Elige, deslumbra, repite.</h1>
+                    <p>Maquillaje, cuidado facial y accesorios para que cada look se vea premium sin complicaciones.</p>
+                    <div class="chip-row">
+                        <span class="chip">Labios</span>
+                        <span class="chip">Piel Glow</span>
+                        <span class="chip">Ojos Intensos</span>
+                        <span class="chip">Brochas Pro</span>
+                    </div>
+                </div>
+                <div class="hero-panel">
+                    <h3 style="color: #fff;">Promo relampago</h3>
+                    <p>Agrega 2 productos y recibe 10% adicional automaticamente al finalizar tu compra.</p>
+                    <a href="ofertas.html" class="btn-secondary">Activar Descuento</a>
+                </div>
+            </div>
+        </section>
+
+        <section class="fade-up delay-1">
+            <h2>Nuestros Productos Exclusivos</h2>
+            <p class="section-copy">Seleccionados por calidad, duracion y acabado elegante para el dia y la noche.</p>
         <div class="grid-container">
-            <!-- Producto 1 -->
             <div class="card">
-                <!-- Usando placeholder de imagen, reemplaza src con tus fotos reales -->
                 <img src="https://placehold.co/300x250/810319/ffffff?text=Lipstick+Mate" class="card-img-top" alt="Labial">
                 <div class="card-body">
+                    <span class="eyebrow">Top venta</span>
                     <h3>Labial Mate Cherry</h3>
                     <p class="price">$15.00</p>
                     <p class="stock">Disponibles: 20 unidades</p>
@@ -38,10 +66,10 @@
                 </div>
             </div>
 
-            <!-- Producto 2 -->
             <div class="card">
                 <img src="https://placehold.co/300x250/810319/ffffff?text=Paleta+Sombras" class="card-img-top" alt="Sombras">
                 <div class="card-body">
+                    <span class="eyebrow">Favorito</span>
                     <h3>Paleta Nude Dreams</h3>
                     <p class="price">$35.50</p>
                     <p class="stock">Disponibles: 8 unidades</p>
@@ -49,21 +77,21 @@
                 </div>
             </div>
 
-            <!-- Producto 3 -->
             <div class="card">
                 <img src="https://placehold.co/300x250/810319/ffffff?text=Serum+Facial" class="card-img-top" alt="Serum">
                 <div class="card-body">
+                    <span class="eyebrow">Skincare</span>
                     <h3>Serum Hidratante Gold</h3>
                     <p class="price">$28.00</p>
                     <p class="stock">Disponibles: 15 unidades</p>
                     <button class="btn btn-buy">Añadir al Carrito</button>
                 </div>
             </div>
-            
-             <!-- Producto 4 -->
+
              <div class="card">
                 <img src="https://placehold.co/300x250/810319/ffffff?text=Kit+Brochas" class="card-img-top" alt="Brochas">
                 <div class="card-body">
+                    <span class="eyebrow">Profesional</span>
                     <h3>Kit Profesional Brochas</h3>
                     <p class="price">$45.00</p>
                     <p class="stock">Disponibles: 5 unidades</p>
@@ -71,10 +99,20 @@
                 </div>
             </div>
         </div>
+        </section>
+
+        <section class="offer-banner fade-up delay-2">
+            <h2>Arma Tu Beauty Box</h2>
+            <p class="section-copy">Combina 3 productos, recibe empaque premium y un mini obsequio sorpresa.</p>
+            <div class="button-row" style="justify-content: center;">
+                <a href="ofertas.html" class="btn">Ver Combos Del Mes</a>
+            </div>
+        </section>
     </div>
 
     <footer>
-        <p>&copy; 2023 D&J Beauty Studio.</p>
+        <p>&copy; 2026 D&J Beauty Studio.</p>
+        <p>Todo lo que necesitas para destacar con confianza.</p>
     </footer>
 
     <script src="script.js"></script>
