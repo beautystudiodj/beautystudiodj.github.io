@@ -2,15 +2,22 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Staff - D&J Beauty Studio</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" href="https://i.imgur.com/Kz8qfG3.png" type="image/png">
 </head>
 <body>
 
+    <div class="promo-bar">Asesoria personalizada para que compres justo lo que te favorece</div>
+
     <header>
         <div class="logo-container">
-            <img src="https://i.imgur.com/Kz8qfG3.png" alt="Logo D&J Beauty Studio" style="width: 150px;">
+            <img src="https://i.imgur.com/Kz8qfG3.png" alt="Logo D&J Beauty Studio">
+            <div class="brand-copy">
+                <h3>D&J Beauty Studio</h3>
+                <p>Un equipo femenino que te guia para comprar con seguridad.</p>
+            </div>
         </div>
     </header>
 
@@ -23,47 +30,76 @@
     </nav>
 
     <div class="container">
-        <h2>Nuestro Equipo de Expertos</h2>
-        <p style="text-align: center; margin-bottom: 30px;">Conoce a los profesionales detrás de tu belleza.</p>
+        <section class="hero fade-up">
+            <div class="hero-grid">
+                <div>
+                    <p class="eyebrow">Beauty Advisors</p>
+                    <h1>No vendemos por vender, te asesoramos de verdad.</h1>
+                    <p>Conoce al staff que te ayuda a elegir tonos, texturas y rutinas segun tu estilo de vida.</p>
+                    <div class="button-row">
+                        <a href="productos.html" class="btn">Comprar Con Asesoria</a>
+                        <a href="envios.html" class="btn-outline">Ver Tiempos De Entrega</a>
+                    </div>
+                </div>
+                <div class="hero-panel">
+                    <h3 style="color: #fff;">Respuesta rapida por WhatsApp</h3>
+                    <p>Te ayudamos a seleccionar productos en menos de 10 minutos.</p>
+                    <a href="#" class="btn-secondary">Solicitar Recomendacion</a>
+                </div>
+            </div>
+        </section>
 
-        <div class="grid-container">
-            <!-- Miembro 1 -->
+        <section class="fade-up delay-1">
+            <h2>Nuestro Equipo De Expertas</h2>
+            <p class="section-copy">Especialistas en maquillaje, cuidado capilar y experiencia de compra personalizada.</p>
+            <div class="grid-container">
             <div class="card">
                 <img src="https://placehold.co/300x250/810319/ffffff?text=Diana" class="card-img-top" alt="Staff 1">
                 <div class="card-body">
+                    <span class="staff-badge">CEO y Fundadora</span>
                     <h3>Diana J.</h3>
-                    <p style="color: #666; font-style: italic;">CEO & Fundadora</p>
-                    <p>Especialista en Maquillaje Profesional y gestión de marca.</p>
+                    <p>Especialista en maquillaje profesional y construccion de looks de alto impacto.</p>
+                    <p class="quote">"La belleza perfecta es la que te hace sentir poderosa."</p>
                     <button class="btn btn-contact">Agendar Cita</button>
                 </div>
             </div>
 
-            <!-- Miembro 2 -->
             <div class="card">
                 <img src="https://placehold.co/300x250/810319/ffffff?text=Julia" class="card-img-top" alt="Staff 2">
                 <div class="card-body">
+                    <span class="staff-badge">Estilista Senior</span>
                     <h3>Julia R.</h3>
-                    <p style="color: #666; font-style: italic;">Estilista Senior</p>
-                    <p>Experta en colorimetría y cuidado capilar.</p>
+                    <p>Experta en colorimetria, tendencia y cuidado capilar para eventos.</p>
+                    <p class="quote">"Cada detalle cuenta cuando quieres un look inolvidable."</p>
                     <button class="btn btn-contact">Consultar</button>
                 </div>
             </div>
 
-            <!-- Miembro 3 -->
             <div class="card">
                 <img src="https://placehold.co/300x250/810319/ffffff?text=Carla" class="card-img-top" alt="Staff 3">
                 <div class="card-body">
+                    <span class="staff-badge">Customer Beauty Care</span>
                     <h3>Carla M.</h3>
-                    <p style="color: #666; font-style: italic;">Atención al Cliente</p>
-                    <p>Encargada de ventas y logística de envíos.</p>
+                    <p>Encargada de experiencia de compra y coordinacion de envios nacionales.</p>
+                    <p class="quote">"Tu pedido debe llegar tan bonito como lo imaginaste."</p>
                     <button class="btn btn-contact">Contactar</button>
                 </div>
             </div>
         </div>
+        </section>
+
+        <section class="newsletter fade-up delay-2">
+            <h2>Asesoria Gratuita De Primera Compra</h2>
+            <p class="section-copy">Cuéntanos lo que quieres lograr y te sugerimos el kit ideal para tu tipo de piel y estilo.</p>
+            <div class="button-row" style="justify-content: center;">
+                <a href="productos.html" class="btn">Ver Productos Recomendados</a>
+            </div>
+        </section>
     </div>
 
     <footer>
-        <p>&copy; 2023 D&J Beauty Studio.</p>
+        <p>&copy; 2026 D&J Beauty Studio.</p>
+        <p>Tu equipo beauty de confianza en cada compra.</p>
     </footer>
 
     <script src="script.js"></script>
