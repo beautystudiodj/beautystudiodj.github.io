@@ -55,45 +55,45 @@
             <h2>Nuestros Productos Exclusivos</h2>
             <p class="section-copy">Seleccionados por calidad, duracion y acabado elegante para el dia y la noche.</p>
         <div class="grid-container">
-            <div class="card">
+            <div class="card" data-price="15000">
                 <img src="https://placehold.co/300x250/810319/ffffff?text=Lipstick+Mate" class="card-img-top" alt="Labial">
                 <div class="card-body">
                     <span class="eyebrow">Top venta</span>
                     <h3>Labial Mate Cherry</h3>
-                    <p class="price">$15.00</p>
+                    <p class="price">COP $15.000</p>
                     <p class="stock">Disponibles: 20 unidades</p>
                     <button class="btn btn-buy">Añadir al Carrito</button>
                 </div>
             </div>
 
-            <div class="card">
+            <div class="card" data-price="35500">
                 <img src="https://placehold.co/300x250/810319/ffffff?text=Paleta+Sombras" class="card-img-top" alt="Sombras">
                 <div class="card-body">
                     <span class="eyebrow">Favorito</span>
                     <h3>Paleta Nude Dreams</h3>
-                    <p class="price">$35.50</p>
+                    <p class="price">COP $35.500</p>
                     <p class="stock">Disponibles: 8 unidades</p>
                     <button class="btn btn-buy">Añadir al Carrito</button>
                 </div>
             </div>
 
-            <div class="card">
+            <div class="card" data-price="28000">
                 <img src="https://placehold.co/300x250/810319/ffffff?text=Serum+Facial" class="card-img-top" alt="Serum">
                 <div class="card-body">
                     <span class="eyebrow">Skincare</span>
                     <h3>Serum Hidratante Gold</h3>
-                    <p class="price">$28.00</p>
+                    <p class="price">COP $28.000</p>
                     <p class="stock">Disponibles: 15 unidades</p>
                     <button class="btn btn-buy">Añadir al Carrito</button>
                 </div>
             </div>
 
-             <div class="card">
+             <div class="card" data-price="45000">
                 <img src="https://placehold.co/300x250/810319/ffffff?text=Kit+Brochas" class="card-img-top" alt="Brochas">
                 <div class="card-body">
                     <span class="eyebrow">Profesional</span>
                     <h3>Kit Profesional Brochas</h3>
-                    <p class="price">$45.00</p>
+                    <p class="price">COP $45.000</p>
                     <p class="stock">Disponibles: 5 unidades</p>
                     <button class="btn btn-buy">Añadir al Carrito</button>
                 </div>
@@ -137,7 +137,23 @@
         <p>Todo lo que necesitas para destacar con confianza.</p>
     </footer>
 
-    <a class="floating-whatsapp" href="https://wa.me/593000000000?text=Hola%20quiero%20ayuda%20para%20elegir%20productos" target="_blank" rel="noopener noreferrer">Asesora de Compra</a>
+    <a class="floating-whatsapp" href="https://wa.me/573227098891?text=Hola%20quiero%20ayuda%20para%20elegir%20productos" target="_blank" rel="noopener noreferrer">Asesora de Compra</a>
+
+    <a id="cart-button" class="floating-cart" href="#" aria-label="Ver carrito">🛒 <span id="cart-count">0</span></a>
+
+    <div id="cart-panel" class="cart-panel" aria-hidden="true">
+        <div class="cart-header">
+            <h4>Tu Carrito</h4>
+            <button id="cart-close" aria-label="Cerrar carrito">✕</button>
+        </div>
+        <div id="cart-items" class="cart-items"></div>
+        <div class="cart-footer">
+            <div class="cart-total">Total: <strong id="cart-total">COP $0</strong></div>
+            <div class="cart-actions">
+                <button id="checkout" class="btn">Pagar</button>
+            </div>
+        </div>
+    </div>
 
     <script src="script.js"></script>
 </body>
