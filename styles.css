@@ -721,6 +721,44 @@ footer p {
     border: 0 !important;
 }
 
+/* Contraste automático: texto blanco sobre fondos oscuros y
+   color vino (--wine-700 / #810319) sobre fondos blancos */
+/* Elementos con fondo oscuro: forzar texto blanco */
+.on-dark,
+.hero,
+.hero *,
+.promo-bar,
+.floating-whatsapp,
+.floating-cart {
+    color: #ffffff !important;
+}
+
+/* Elementos con fondo blanco: forzar texto color vino */
+.on-light,
+.card,
+.card *,
+.offer-banner,
+.feature-strip article,
+.timeline article,
+.stats-band div,
+.testimonial,
+.newsletter,
+.info-panel,
+.two-col,
+.hero-panel {
+    color: var(--wine-700) !important;
+}
+
+/* Enlaces y botones en fondos blancos deben usar color vino cuando corresponda */
+.card a, .card .eyebrow, .offer-banner a, .testimonial a, .newsletter a {
+    color: var(--wine-700) !important;
+}
+
+/* Evitar que botones primarios cambien color por estas reglas */
+.card .btn, .card .btn-secondary, .offer-banner .btn {
+    color: inherit !important;
+}
+
 /* Floating social links (bottom-left) */
 .floating-social {
     position: fixed;
