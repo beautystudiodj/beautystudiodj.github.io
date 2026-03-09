@@ -167,6 +167,27 @@ document.addEventListener('DOMContentLoaded', () => {
             window.open(href, '_blank', features);
         });
     });
+    // Dark mode: read preference and wire toggle
+    const darkToggle = document.getElementById('dark-toggle');
+    function applyDarkMode(enabled) {
+        document.body.classList.toggle('dark-mode', !!enabled);
+        if (darkToggle) {
+            darkToggle.innerText = enabled ? '☀️' : '🌙';
+            darkToggle.setAttribute('aria-pressed', !!enabled);
+        }
+    }
+
+    const stored = localStorage.getItem('dj_dark');
+    const initialDark = stored === '1';
+    applyDarkMode(initialDark);
+
+    if (darkToggle) {
+        darkToggle.addEventListener('click', (e) => {
+            const isDark = document.body.classList.toggle('dark-mode');
+            localStorage.setItem('dj_dark', isDark ? '1' : '0');
+            applyDarkMode(isDark);
+        });
+    }
 
     console.log("%c D&J Beauty Studio ", "background: #810319; color: #fff; padding: 5px; border-radius: 3px;");
 });

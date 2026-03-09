@@ -305,6 +305,58 @@ section {
     box-shadow: var(--shadow-hover);
 }
 
+/* Neon glow border for product/staff cards */
+.card {
+    border-color: rgba(129,3,25,0.12);
+    box-shadow: var(--shadow-soft), 0 0 18px rgba(129,3,25,0.06);
+}
+.card:hover {
+    box-shadow: var(--shadow-hover), 0 0 30px rgba(129,3,25,0.14);
+}
+
+/* Dark mode toggle button (top-left) */
+.dark-toggle {
+    position: fixed;
+    left: 18px;
+    top: 18px;
+    z-index: 100000;
+    background: linear-gradient(180deg,#fff,#f6f0f2);
+    color: var(--wine-700);
+    border: 1px solid rgba(129,3,25,0.08);
+    padding: 8px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+    font-weight: 800;
+}
+.dark-toggle:hover { transform: translateY(-3px); }
+
+/* Dark mode styles */
+.dark-mode {
+    background: linear-gradient(180deg,#0f0f10 0%, #141217 100%);
+    color: #e8e6e8;
+}
+.dark-mode .promo-bar,
+.dark-mode nav {
+    background: rgba(20,17,20,0.92);
+    color: #fff;
+}
+.dark-mode header .brand-copy h3,
+.dark-mode header .brand-copy p,
+.dark-mode h1,h2,h3,h4 {
+    color: #fff;
+}
+.dark-mode .card {
+    background: #19171a;
+    border-color: rgba(129,3,25,0.25);
+    box-shadow: 0 8px 26px rgba(0,0,0,0.6), 0 0 20px rgba(129,3,25,0.18);
+}
+.dark-mode .floating-whatsapp {
+    background: linear-gradient(120deg,#4f0012,#810319);
+}
+.dark-mode .floating-cart { background: linear-gradient(120deg,#222,#333); }
+.dark-mode .floating-social .social-link { box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+
 .card-img-top {
     width: 100%;
     height: 250px;
