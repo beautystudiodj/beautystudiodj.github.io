@@ -153,5 +153,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     
     // 5. Saludo en consola
+    // 6. Abrir redes sociales en ventana pequeña (popup)
+    const socialLinks = document.querySelectorAll('.floating-social .social-link');
+    socialLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const href = link.href;
+            const w = 820;
+            const h = 640;
+            const left = Math.floor((window.screen.width - w) / 2);
+            const top = Math.floor((window.screen.height - h) / 2);
+            const features = `toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes,width=${w},height=${h},top=${top},left=${left}`;
+            window.open(href, '_blank', features);
+        });
+    });
+
     console.log("%c D&J Beauty Studio ", "background: #810319; color: #fff; padding: 5px; border-radius: 3px;");
 });
