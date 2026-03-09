@@ -357,6 +357,31 @@ section {
 .dark-mode .floating-cart { background: linear-gradient(120deg,#222,#333); }
 .dark-mode .floating-social .social-link { box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
 
+/* Light mode explicit overrides to avoid white-on-white from inline styles */
+.light-mode .hero-panel h3,
+.light-mode .hero-panel p,
+.light-mode .hero p,
+.light-mode .card .card-body h3,
+.light-mode .card .card-body p,
+.light-mode .section-copy,
+.light-mode p,
+.light-mode .quote,
+.light-mode .eyebrow,
+.light-mode .price,
+.light-mode .stock {
+    color: var(--ink) !important;
+}
+
+/* Ensure links and nav items are visible in both modes */
+.dark-mode nav a { color: #fff; }
+.dark-mode a { color: #ffdede; }
+.light-mode nav a { color: var(--wine-700); }
+
+/* Buttons contrast */
+.dark-mode .btn { background: var(--wine-700); color: #fff; }
+.dark-mode .btn-secondary { background: #fff; color: var(--wine-700); }
+.light-mode .btn-secondary { color: var(--wine-700); }
+
 .card-img-top {
     width: 100%;
     height: 250px;

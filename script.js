@@ -170,10 +170,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Dark mode: read preference and wire toggle
     const darkToggle = document.getElementById('dark-toggle');
     function applyDarkMode(enabled) {
-        document.body.classList.toggle('dark-mode', !!enabled);
+        const on = !!enabled;
+        document.body.classList.toggle('dark-mode', on);
+        document.body.classList.toggle('light-mode', !on);
         if (darkToggle) {
-            darkToggle.innerText = enabled ? '☀️' : '🌙';
-            darkToggle.setAttribute('aria-pressed', !!enabled);
+            darkToggle.innerText = on ? '☀️' : '🌙';
+            darkToggle.setAttribute('aria-pressed', on);
         }
     }
 
@@ -183,7 +185,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (darkToggle) {
         darkToggle.addEventListener('click', (e) => {
-            const isDark = document.body.classList.toggle('dark-mode');
+            // read current state then flip
+            const currently = document.body.classList.contains('dark-mode');
+            const isDark = !currently;
             localStorage.setItem('dj_dark', isDark ? '1' : '0');
             applyDarkMode(isDark);
         });
