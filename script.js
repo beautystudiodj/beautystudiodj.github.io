@@ -136,6 +136,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // 4. Funcionalidad Botón Contacto / Staff
     const botonesContacto = document.querySelectorAll('.btn-contact');
     botonesContacto.forEach(btn => {
+        const number = btn.dataset.number;
+        if (number) {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const msg = encodeURIComponent('Hola, quiero agendar una cita.');
+                const wa = `https://wa.me/${number}?text=${msg}`;
+                window.open(wa, '_blank');
+            });
+            return;
+        }
         if (btn.tagName.toLowerCase() === 'a' && btn.getAttribute('href')) return;
         btn.addEventListener('click', () => {
             alert("Redirigiendo a WhatsApp para agendar cita... (Simulación)");
