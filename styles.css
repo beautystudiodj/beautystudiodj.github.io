@@ -696,3 +696,47 @@ footer p {
         width: 100%;
     }
 }
+
+/* Utility: visually hide content but keep it accessible to screen readers */
+.sr-only {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+}
+
+/* Floating social links (bottom-left) */
+.floating-social {
+    position: fixed;
+    left: 18px;
+    bottom: 18px;
+    z-index: 1600;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.floating-social .social-link {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    text-decoration: none;
+    box-shadow: 0 10px 22px rgba(0,0,0,0.18);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.floating-social .social-link:hover { transform: translateY(-4px); box-shadow: 0 14px 34px rgba(0,0,0,0.22); }
+
+.floating-social .social-link.tiktok { background: linear-gradient(135deg,#010101 0%, #25f4ee 40%, #ff0050 100%); }
+.floating-social .social-link.instagram { background: radial-gradient(circle at 30% 30%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%); }
+
+.floating-social svg { width: 20px; height: 20px; }
