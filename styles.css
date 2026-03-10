@@ -759,6 +759,20 @@ footer p {
     color: inherit !important;
 }
 
+/* Clase utilitaria para acentos en color vino (#810319) */
+.accent-wine {
+    color: var(--wine-700) !important;
+}
+
+.accent-wine.btn-secondary {
+    color: var(--wine-700) !important;
+}
+
+/* Utilidad: texto blanco forzado */
+.text-white {
+    color: #ffffff !important;
+}
+
 /* Floating social links (bottom-left) */
 .floating-social {
     position: fixed;
