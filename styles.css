@@ -773,6 +773,23 @@ footer p {
     color: #ffffff !important;
 }
 
+/* Utilidad: fondo vino y texto blanco (para recuadros/badges) */
+.bg-wine {
+    background: var(--wine-700) !important;
+    color: #ffffff !important;
+}
+
+/* Badge común para marcadores en tarjetas */
+.badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    border-radius: 6px;
+    z-index: 2;
+}
+
 /* Floating social links (bottom-left) */
 .floating-social {
     position: fixed;
