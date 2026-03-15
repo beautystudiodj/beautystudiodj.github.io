@@ -107,7 +107,7 @@ nav {
 }
 
 nav a {
-    color: var(--wine-700);
+    color: #810319 !important;
     text-decoration: none;
     font-weight: 700;
     font-size: 0.82rem;
@@ -341,7 +341,7 @@ section {
     font-size: 0.72rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: var(--wine-700);
+    color: #810319 !important;
     background: var(--blush-100);
     border-radius: 999px;
     padding: 6px 12px;
@@ -458,7 +458,7 @@ ul.clean-list li::before {
 .stats-band strong {
     display: block;
     font-size: 1.4rem;
-    color: var(--wine-700);
+    color: #810319 !important;
 }
 
 .testimonials {
@@ -601,7 +601,7 @@ ul.clean-list li::before {
 .cart-panel.show { display: flex; }
 
 .staff-badge {
-    color: var(--wine-500);
+    color: #810319 !important;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
