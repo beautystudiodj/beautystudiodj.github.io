@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<style>
+    /* Estilos Generales de la Sección */
+    .crochet-section {
+        padding: 50px 20px;
+        background-color: #f9f9f9; /* Un fondo suave para resaltar los productos */
+        text-align: center;
+        font-family: 'Arial', sans-serif;
+    }
+
+    .section-title {
+        color: #333;
+        font-size: 2.5rem;
+        margin-bottom: 40px;
+        text-transform: uppercase;
+        letter-spacing: 2px;
+    }
+
+    /* Contenedor de la cuadrícula de productos */
+    .products-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 30px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    /* Tarjeta de Producto Individual */
+    .product-card {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        padding: 20px;
+        transition: transform 0.3s ease;
+    }
+
+    .product-card:hover {
+        transform: translateY(-5px);
+    }
+
+    .product-image {
+        width: 100%;
+        height: 250px;
+        object-fit: cover;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        background-color: #ddd; /* Color de fondo mientras carga la imagen */
+    }
+
+    .product-name {
+        font-size: 1.2rem;
+        font-weight: bold;
+        color: #222;
+        margin: 10px 0;
+    }
+
+    .product-price {
+        font-size: 1.1rem;
+        color: #810319; /* Usando tu color para el precio también */
+        font-weight: bold;
+        margin-bottom: 15px;
+    }
+
+    /* Controles de Cantidad */
+    .quantity-selector {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 15px;
+    }
+
+    .qty-btn {
+        background: #eee;
+        border: none;
+        width: 30px;
+        height: 30px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+
+    .qty-input {
+        width: 40px;
+        text-align: center;
+        border: 1px solid #eee;
+        margin: 0 5px;
+        height: 28px;
+    }
+
+    /* Botón Principal */
+    .add-btn {
+        background-color: #810319; /* Tu color específico */
+        color: white;
+        border: none;
+        padding: 12px 25px;
+        border-radius: 25px;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: background-color 0.3s;
+        width: 100%;
+    }
+
+    .add-btn:hover {
+        background-color: #5e0212; /* Un tono un poco más oscuro para el hover */
+    }
+
+</style>
+</head>
+<body>
+
+<section class="crochet-section" id="crochet">
+    <h2 class="section-title">Colección Crochet - BeautyStudioDJ</h2>
+
+    <div class="products-grid">
+        <!-- Producto 1 -->
+        <div class="product-card">
+            <!-- REEMPLAZA 'ruta-imagen-1.jpg' con tu imagen real -->
+            <img src="https://via.placeholder.com/300x300?text=Top+Crochet" alt="Top Crochet" class="product-image">
+            <h3 class="product-name">Top Tejido a Mano</h3>
+            <p class="product-price">$25.00</p>
+            
+            <div class="quantity-selector">
+                <button class="qty-btn">-</button>
+                <input type="number" value="1" min="1" class="qty-input">
+                <button class="qty-btn">+</button>
+            </div>
+            
+            <button class="add-btn">Añadir al Carrito</button>
+        </div>
+
+        <!-- Producto 2 -->
+        <div class="product-card">
+            <img src="https://via.placeholder.com/300x300?text=Bolso+Crochet" alt="Bolso Crochet" class="product-image">
+            <h3 class="product-name">Bolso Playero</h3>
+            <p class="product-price">$35.00</p>
+            
+            <div class="quantity-selector">
+                <button class="qty-btn">-</button>
+                <input type="number" value="1" min="1" class="qty-input">
+                <button class="qty-btn">+</button>
+            </div>
+            
+            <button class="add-btn">Añadir al Carrito</button>
+        </div>
+
+        <!-- Producto 3 -->
+        <div class="product-card">
+            <img src="https://via.placeholder.com/300x300?text=Set+Accesorios" alt="Accesorios" class="product-image">
+            <h3 class="product-name">Set de Accesorios</h3>
+            <p class="product-price">$15.00</p>
+            
+            <div class="quantity-selector">
+                <button class="qty-btn">-</button>
+                <input type="number" value="1" min="1" class="qty-input">
+                <button class="qty-btn">+</button>
+            </div>
+            
+            <button class="add-btn">Añadir al Carrito</button>
+        </div>
+    </div>
+</section>
+
+</body>
+</html>
