@@ -262,13 +262,19 @@ h2 {
 }
 
 .btn-outline {
-    border: 1px solid rgba(255, 255, 255, 0.55);
-    color: var(--white);
+    border: 1px solid rgba(129, 3, 25, 0.12);
+    color: var(--wine-700);
     background: transparent;
 }
 
 .btn-outline:hover {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(129, 3, 25, 0.06);
+}
+
+/* Keep white outline buttons when inside the dark hero */
+.hero .btn-outline {
+    border: 1px solid rgba(255, 255, 255, 0.55);
+    color: var(--white);
 }
 
 .button-row {
