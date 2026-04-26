@@ -6,16 +6,6 @@
     <title>Panel Administrador - D&J Beauty Studio</title>
     <link rel="stylesheet" href="../styles.css">
     <link rel="icon" href="https://i.imgur.com/vscZKK3.png" type="image/png">
-    <style>
-        .admin-container { padding: 24px 16px; }
-        .admin-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap: 16px; margin-top: 16px; }
-        .admin-card { background: #fff; padding: 16px; border-radius: 8px; box-shadow: 0 6px 18px rgba(0,0,0,0.06); }
-        .admin-card h3 { margin-top: 0; }
-        .panel-section { margin-top: 24px; }
-        .admin-actions .btn, .admin-actions button { margin-right: 8px; }
-        form label { display:block; margin-bottom:10px; }
-        form input, form textarea { width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; }
-    </style>
 </head>
 <body>
 
@@ -40,63 +30,18 @@
         <a href="index.html" class="active">Panel</a>
     </nav>
 
-    <div class="container admin-container">
-        <section>
-            <h1>Agregar Producto</h1>
-            <p class="section-copy">Formulario simple para agregar productos al catálogo (almacenado en el navegador).</p>
+    <div class="container">
+        <div class="admin-card">
+            <h1>Panel de Administración</h1>
+            <p class="section-copy">Selecciona una sección para configurar el sitio.</p>
 
-            <form id="add-product-form">
-                <label>Categoria
-                    <select name="eyebrow" id="category-select">
-                        <option value="">Seleccionar...</option>
-                        <option value="Labios">Labios</option>
-                        <option value="Piel Glow">Piel Glow</option>
-                        <option value="Ojos">Ojos</option>
-                        <option value="Brochas Pro">Brochas Pro</option>
-                        <option value="Cuidado corporal">Cuidado corporal</option>
-                        <option value="Cuidado facial">Cuidado facial</option>
-                        <option value="Cuidado capilar">Cuidado capilar</option>
-                        <option value="Cejas">Cejas</option>
-                        <option value="Rostro">Rostro</option>
-                        <option value="Higiene">Higiene</option>
-                        <option value="Edición limitada">Edición limitada</option>
-                        <option value="Accesorios">Accesorios</option>
-                        <option value="__other">Otro (especificar)</option>
-                    </select>
-                </label>
-                <label id="eyebrow-other-label" style="display:none;margin-top:8px;">Especificar categoría
-                    <input name="eyebrow_other" id="eyebrow-other" placeholder="Escribe la nueva categoría">
-                </label>
-                <label>Título
-                    <input name="title" required placeholder="Nombre del producto">
-                </label>
-                <label>Precio (sin separadores)
-                    <input name="price" required placeholder="Ej: 12900">
-                </label>
-                <label>Stock (unidades)
-                    <input name="stock" placeholder="Ej: 10">
-                </label>
-                <label>Imagen (URL)
-                    <input name="image" placeholder="https://...">
-                </label>
-                <label>Descripción
-                    <textarea name="description" rows="3" placeholder="Descripción corta"></textarea>
-                </label>
-
-                <div class="button-row">
-                    <button type="submit" class="btn">Guardar producto</button>
-                    <a class="btn-outline" href="../productos.html">Cancelar</a>
-                </div>
-            </form>
-
-            <div class="panel-section">
-                <h2>Acciones rápidas</h2>
-                <div class="admin-actions">
-                    <button class="btn" onclick="localStorage.removeItem('dj_products'); alert('Datos de productos reseteados (demo).');">Reset productos (demo)</button>
-                    <a class="btn-outline" href="../index.html">Ir al sitio</a>
-                </div>
+            <div class="admin-action-grid">
+                <a class="admin-action-btn primary" href="products.html">Productos</a>
+                <a class="admin-action-btn ghost" href="#">Ofertas (próximamente)</a>
+                <a class="admin-action-btn ghost" href="#">Envíos (próximamente)</a>
+                <a class="admin-action-btn ghost" href="#">Staff (próximamente)</a>
             </div>
-        </section>
+        </div>
     </div>
 
     <footer>
@@ -116,39 +61,6 @@
                 }
             }
         })();
-
-        document.addEventListener('DOMContentLoaded', function(){
-            const form = document.getElementById('add-product-form');
-            form && form.addEventListener('submit', function(e){
-                e.preventDefault();
-                let eyebrow = (form.eyebrow.value || '').trim();
-                if (eyebrow === '__other') {
-                    eyebrow = (form.eyebrow_other.value || '').trim();
-                }
-                const title = (form.title.value || '').trim();
-                const price = parseInt((form.price.value||'').toString().replace(/\D/g,''), 10) || 0;
-                const stock = parseInt(form.stock.value, 10) || 0;
-                const image = (form.image.value || '').trim();
-                const description = (form.description.value || '').trim();
-
-                if (!title){ alert('Título requerido'); return; }
-
-                const product = {
-                    id: 'p' + Date.now(),
-                    eyebrow, title, price, stock, image, description
-                };
-
-                try{
-                    const existing = JSON.parse(localStorage.getItem('dj_products') || '[]');
-                    existing.unshift(product);
-                    localStorage.setItem('dj_products', JSON.stringify(existing));
-                    alert('Producto agregado correctamente.');
-                    window.location.href = '../productos.html';
-                }catch(err){
-                    alert('Error guardando el producto: ' + err.message);
-                }
-            });
-        });
     </script>
     <script src="../script.js"></script>
 </body>

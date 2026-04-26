@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agregar Producto - Panel Admin</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="icon" href="https://i.imgur.com/vscZKK3.png" type="image/png">
+</head>
+<body>
+
+    <div class="promo-bar">Panel Administrador</div>
+
+    <header>
+        <div class="logo-container">
+            <img src="https://i.imgur.com/vscZKK3.png" alt="Logo D&J Beauty Studio">
+            <div class="brand-copy">
+                <h3>Panel Administrador</h3>
+                <p>Agregar Producto (demo)</p>
+            </div>
+        </div>
+    </header>
+
+    <nav>
+        <a href="../index.html">Panel</a>
+        <a href="../productos.html">Sitio Productos</a>
+        <a href="../ofertas.html">Ofertas</a>
+        <a href="../envios.html">Envíos</a>
+        <a href="../staff.html">Staff</a>
+        <a href="index.html">Panel Interno</a>
+    </nav>
+
+    <div class="container">
+        <div class="admin-toolbar">
+            <div class="breadcrumb">Panel / Productos / Agregar</div>
+            <div class="admin-actions">
+                <a class="btn-outline" href="products.html">Volver a Productos</a>
+                <a class="btn" href="index.html">Panel</a>
+            </div>
+        </div>
+
+        <div class="admin-layout">
+            <aside class="admin-sidebar">
+                <div class="admin-card">
+                    <h3>Atajos</h3>
+                    <div class="admin-nav">
+                        <a class="btn-outline" href="products.html">Gestionar Productos</a>
+                        <a class="btn-outline" href="../productos.html">Ver catálogo público</a>
+                    </div>
+                </div>
+            </aside>
+
+            <main class="admin-main">
+                <div class="admin-card admin-form">
+                    <h1>Agregar Producto</h1>
+                    <p class="section-copy">Formulario simple para agregar productos al catálogo (almacenado en el navegador).</p>
+
+                    <form id="add-product-form">
+                        <label>Categoria
+                            <select name="eyebrow" id="category-select">
+                                <option value="">Seleccionar...</option>
+                            </select>
+                        </label>
+                        <label id="eyebrow-other-label" style="display:none;margin-top:8px;">Especificar categoría
+                            <input name="eyebrow_other" id="eyebrow-other" placeholder="Escribe la nueva categoría">
+                        </label>
+
+                        <label>Título
+                            <input name="title" required placeholder="Nombre del producto">
+                        </label>
+                        <label>Precio (sin separadores)
+                            <input name="price" required placeholder="Ej: 12900">
+                        </label>
+                        <label>Stock (unidades)
+                            <input name="stock" placeholder="Ej: 10">
+                        </label>
+                        <label>Imagen (URL)
+                            <input name="image" id="image-input" placeholder="https://...">
+                        </label>
+
+                        <img id="image-preview" class="image-preview" src="https://placehold.co/800x400/eee/777?text=Sin+imagen" alt="Vista previa">
+
+                        <label>Descripción
+                            <textarea name="description" rows="3" placeholder="Descripción corta"></textarea>
+                        </label>
+
+                        <div class="button-row">
+                            <button type="submit" class="btn">Guardar producto</button>
+                            <a class="btn-outline" href="products.html">Cancelar</a>
+                        </div>
+                    </form>
+
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2026 D&J Beauty Studio. Panel demo.</p>
+    </footer>
+
+    <script src="../script.js"></script>
+    <script>
+        function showToast(msg, timeout = 1400){
+            let t = document.getElementById('admin-toast');
+            if (!t){
+                t = document.createElement('div');
+                t.id = 'admin-toast';
+                t.className = 'toast';
+                document.body.appendChild(t);
+            }
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(()=> t.classList.remove('show'), timeout);
+        }
+
+        document.addEventListener('DOMContentLoaded', function(){
+            const form = document.getElementById('add-product-form');
+            const imgInput = document.getElementById('image-input');
+            const imgPreview = document.getElementById('image-preview');
+
+            function updatePreview(){
+                if (!imgInput || !imgPreview) return;
+                const url = imgInput.value.trim();
+                imgPreview.src = url || 'https://placehold.co/800x400/eee/777?text=Sin+imagen';
+            }
+
+            imgInput && imgInput.addEventListener('input', updatePreview);
+
+            form && form.addEventListener('submit', function(e){
+                e.preventDefault();
+                let eyebrow = (form.eyebrow.value || '').trim();
+                if (eyebrow === '__other') eyebrow = (form.eyebrow_other.value || '').trim();
+                const title = (form.title.value || '').trim();
+                const price = parseInt((form.price.value||'').toString().replace(/\D/g,''), 10) || 0;
+                const stock = parseInt(form.stock.value, 10) || 0;
+                const image = (form.image.value || '').trim();
+                const description = (form.description.value || '').trim();
+
+                if (!title){ showToast('Título requerido', 1200); return; }
+
+                const product = { id: 'p' + Date.now(), eyebrow, title, price, stock, image, description };
+
+                try{
+                    const existing = JSON.parse(localStorage.getItem('dj_products') || '[]');
+                    existing.unshift(product);
+                    localStorage.setItem('dj_products', JSON.stringify(existing));
+                    showToast('Producto agregado correctamente');
+                    setTimeout(()=> window.location.href = 'products.html', 900);
+                }catch(err){
+                    showToast('Error guardando el producto', 1600);
+                }
+            });
+
+            // initial preview
+            updatePreview();
+        });
+    </script>
+</body>
+</html>
