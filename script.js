@@ -124,8 +124,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const lines = cart.map(it => `- ${it.name} (${formatCOP(it.price)})`);
         const total = formatCOP(cartTotal());
-        const msg = `Hola%20quiero%20comprar:%0A${encodeURIComponent(lines.join('%0A'))}%0ATotal:%20${encodeURIComponent(total)}`;
-        const wa = `https://wa.me/573227098891?text=${msg}`;
+        const plainMsg = `Hola quiero comprar:\n${lines.join('\n')}\nTotal: ${total}`;
+        const wa = `https://wa.me/573227098891?text=${encodeURIComponent(plainMsg)}`;
         window.open(wa, '_blank');
     });
 
