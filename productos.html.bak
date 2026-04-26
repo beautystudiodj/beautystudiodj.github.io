@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Productos - D&J Beauty Studio</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="https://i.imgur.com/vscZKK3.png" type="image/png">
+</head>
+<body>
+
+    <div class="promo-bar">Nuevos tonos cada semana | Compra 2 y lleva 1 ítem gratis</div>
+
+n        <header>
+            <div class="logo-container">
+                <img src="https://i.imgur.com/vscZKK3.png" alt="Logo D&J Beauty Studio">
+                <div class="brand-copy">
+                    <h3>D&J Beauty Studio</h3>
+                    <p>Colecciones irresistibles para una belleza que se nota.</p>
+                </div>
+            </div>
+        </header>
+
+n                <div class="card" data-price="6000">
+                    <img src="https://i.imgur.com/75plGLz.png" class="card-img-top" alt="Lip Balm Fresa">
+                    <div class="card-body">
+                        <span class="eyebrow">Labios</span>
+                        <h3>Fresa</h3>
+                        <p class="price">COP $6.000</p>
+                        <p class="stock">Disponibles: 8 unidades</p>
+                        <button class="btn btn-buy">Añadir al Carrito</button>
+                    </div>
+                </div>
+
+                <div class="card" data-price="25000">
+                    <img src="https://i.imgur.com/NOzC3qF.png" class="card-img-top" alt="Loción Capilar">
+                    <div class="card-body">
+                        <span class="eyebrow">Corporal</span>
+                        <h3>Loción Capilar</h3>
+                        <p class="price">COP $25.000</p>
+                        <p class="stock">Disponibles: 6 unidades</p>
+                        <button class="btn btn-buy">Añadir al Carrito</button>
+                    </div>
+                </div>
+
+                <div class="card" data-price="18000">
+                    <img src="https://i.imgur.com/xVgg7AF.png" class="card-img-top" alt="Lip Serum Chocolate Kiss">
+                    <div class="card-body">
+                        <span class="eyebrow">Labios</span>
+                        <h3>Lip Serum Chocolate Kiss</h3>
+                        <p class="price">COP $18.000</p>
+                        <p class="stock">Disponibles: 4 unidades</p>
+                        <button class="btn btn-buy">Añadir al Carrito</button>
+                    </div>
+                </div>
+
+                <div class="card" data-price="18000">
+                    <img src="https://i.imgur.com/X7mYyp0.png" class="card-img-top" alt="Lip Serum Piña Colada">
+                    <div class="card-body">
+                        <span class="eyebrow">Labios</span>
+                        <h3>Lip Serum Piña Colada</h3>
+                        <p class="price">COP $18.000</p>
+                        <p class="stock">Disponibles: 4 unidades</p>
+                        <button class="btn btn-buy">Añadir al Carrito</button>
+                    </div>
+                </div>
+
+                <div class="card" data-price="25000">
+                    <img src="https://i.imgur.com/rdSBLtp.png" class="card-img-top" alt="Pretty Blush">
+                    <div class="card-body">
+                        <span class="eyebrow">Maquillaje</span>
+                        <h3>Pretty Blush</h3>
+                        <p class="price">COP $25.000</p>
+                        <p class="stock">Disponibles: 4 unidades</p>
+                        <button class="btn btn-buy">Añadir al Carrito</button>
+                    </div>
+                </div>
+
+                <div class="card" data-price="16000">
+                    <img src="https://i.imgur.com/qKwZpDP.png" class="card-img-top" alt="Purpure Duo">
+                    <div class="card-body">
+                        <span class="eyebrow">Labios</span>
+                        <h3>Purpure Duo</h3>
+                        <p class="price">COP $16.000</p>
+                        <p class="stock">Disponibles: 2 unidades</p>
+                        <button class="btn btn-buy">Añadir al Carrito</button>
+                    </div>
+                </div>
+
+                <div class="card" data-price="30000">
+                    <img src="https://i.imgur.com/jdjyog7.png" class="card-img-top" alt="Body Kit Corporal">
+                    <div class="card-body">
+                        <span class="eyebrow">Corporal</span>
+                        <h3>Body Kit Corporal</h3>
+                        <p class="price">COP $30.000</p>
+                        <p class="stock">Disponibles: 2 unidades</p>
+                        <button class="btn btn-buy">Añadir al Carrito</button>
+                    </div>
+                </div>
+
+                <div class="card" data-price="10000">
+                    <img src="https://i.imgur.com/wEF85Ps.png" class="card-img-top" alt="Betún de Cejas">
+                    <div class="card-body">
+                        <span class="eyebrow">Cejas</span>
+                        <h3>Betún de Cejas</h3>
+                        <p class="price">COP $10.000</p>
+                        <p class="stock">Disponibles: 4 unidades</p>
+                        <button class="btn btn-buy">Añadir al Carrito</button>
+                    </div>
+                </div>
