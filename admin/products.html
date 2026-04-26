@@ -54,6 +54,12 @@
     </footer>
 
     <script>
+        // API helpers (use meta[name="api-base"] or window.__API_BASE__ to point to a remote API)
+        function getApiBase(){
+            try{ const m = document.querySelector('meta[name="api-base"]'); const g = window.__API_BASE__ || window.__apiBase__ || ''; const b = (m && m.content) ? m.content : g; return (b||'').toString().replace(/\/$/, ''); }catch(e){ return ''; }
+        }
+        async function apiFetch(endpoint, opts){ const base = getApiBase(); const url = (base ? base.replace(/\/$/, '') + '/api' : '/api') + endpoint; return fetch(url, opts); }
+
         function loadProducts(){
             try{ return JSON.parse(localStorage.getItem('dj_products')||'[]'); }catch(e){ return []; }
         }
@@ -148,11 +154,11 @@
             // If API available, push changes to server
             if (useApi){
                 try{
-                    const res = await fetch('/api/products/bulk-stock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates }) });
-                    if (res.ok){
+                    const res = await apiFetch('/products/bulk-stock', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates }) });
+                    if (res && res.ok){
                         // refresh serverProducts from API
-                        const fresh = await fetch('/api/products');
-                        serverProducts = fresh.ok ? await fresh.json() : serverProducts;
+                        const fresh = await apiFetch('/products');
+                        serverProducts = (fresh && fresh.ok) ? await fresh.json() : serverProducts;
                         pendingStockChanges = {};
                         showToast('Stock actualizado (DB)', 1400);
                         renderProducts();
@@ -179,8 +185,8 @@
             // try server delete first
             if (useApi){
                 try{
-                    const res = await fetch('/api/products/' + encodeURIComponent(id), { method: 'DELETE' });
-                    if (res.ok){
+                    const res = await apiFetch('/products/' + encodeURIComponent(id), { method: 'DELETE' });
+                    if (res && res.ok){
                         serverProducts = (serverProducts || []).filter(p => p.id !== id);
                         if (pendingStockChanges[id] !== undefined) delete pendingStockChanges[id];
                         showToast('Producto eliminado (DB)');
@@ -201,8 +207,8 @@
         document.addEventListener('DOMContentLoaded', async ()=>{
             // try to use API; if available, load server products
             try{
-                const res = await fetch('/api/products');
-                if (res.ok){ serverProducts = await res.json(); useApi = true; }
+                const res = await apiFetch('/products');
+                if (res && res.ok){ serverProducts = await res.json(); useApi = true; }
             }catch(e){ useApi = false; serverProducts = null; }
 
             renderProducts();

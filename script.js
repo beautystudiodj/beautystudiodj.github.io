@@ -6,6 +6,22 @@ const DJ_CATEGORIES = [
     
 ];
 
+// API base helpers: allow using a remote API by setting a meta tag
+function getApiBase(){
+    try{
+        const meta = document.querySelector('meta[name="api-base"]');
+        const globalBase = window.__API_BASE__ || window.__apiBase__ || '';
+        const base = (meta && meta.content) ? meta.content.trim() : (globalBase || '').toString();
+        return base.replace(/\/$/, '');
+    }catch(e){ return ''; }
+}
+
+async function apiFetch(endpoint, opts){
+    const base = getApiBase();
+    const url = (base ? (base.replace(/\/$/, '') + '/api') : '/api') + endpoint;
+    return fetch(url, opts);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     let currentCategoryFilter = '';
     // 1. Marcar enlace activo en el menú
@@ -186,8 +202,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Try to load products from API (if server is running) and refresh UI
     (async function tryLoadFromApi(){
         try{
-            const res = await fetch('/api/products');
-            if (res.ok){
+            const res = await apiFetch('/products');
+            if (res && res.ok){
                 const prods = await res.json();
                 if (Array.isArray(prods)){
                     saveProducts(prods);

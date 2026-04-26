@@ -143,8 +143,14 @@
 
                 async function saveToApi(prod){
                     try{
-                        const res = await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prod) });
-                        if (res.ok){ const created = await res.json(); return created; }
+                        if (typeof apiFetch === 'function'){
+                            const res = await apiFetch('/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prod) });
+                            if (res && res.ok){ const created = await res.json(); return created; }
+                        } else {
+                            // fallback to direct fetch (relative path)
+                            const res = await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prod) });
+                            if (res.ok){ const created = await res.json(); return created; }
+                        }
                     }catch(err){ }
                     return null;
                 }
