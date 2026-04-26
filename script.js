@@ -183,6 +183,21 @@ document.addEventListener('DOMContentLoaded', () => {
     createCategoryFilterUI();
     renderProducts();
 
+    // Try to load products from API (if server is running) and refresh UI
+    (async function tryLoadFromApi(){
+        try{
+            const res = await fetch('/api/products');
+            if (res.ok){
+                const prods = await res.json();
+                if (Array.isArray(prods)){
+                    saveProducts(prods);
+                    createCategoryFilterUI();
+                    renderProducts();
+                }
+            }
+        }catch(e){ /* ignore if API not available */ }
+    })();
+
     // 3. Funcionalidad de Botones "Añadir al Carrito" -> carrito funcional
     const cartButton = document.getElementById('cart-button');
     const cartPanel = document.getElementById('cart-panel');

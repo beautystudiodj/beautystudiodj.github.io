@@ -127,7 +127,7 @@
 
             imgInput && imgInput.addEventListener('input', updatePreview);
 
-            form && form.addEventListener('submit', function(e){
+            form && form.addEventListener('submit', async function(e){
                 e.preventDefault();
                 let eyebrow = (form.eyebrow.value || '').trim();
                 if (eyebrow === '__other') eyebrow = (form.eyebrow_other.value || '').trim();
@@ -139,13 +139,30 @@
 
                 if (!title){ showToast('Título requerido', 1200); return; }
 
-                const product = { id: 'p' + Date.now(), eyebrow, title, price, stock, image, description };
+                const product = { eyebrow, title, price, stock, image, description };
+
+                async function saveToApi(prod){
+                    try{
+                        const res = await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prod) });
+                        if (res.ok){ const created = await res.json(); return created; }
+                    }catch(err){ }
+                    return null;
+                }
+
+                // Try API first, then fallback to localStorage
+                const created = await saveToApi(product);
+                if (created){
+                    showToast('Producto agregado (DB)');
+                    setTimeout(()=> window.location.href = 'products.html', 900);
+                    return;
+                }
 
                 try{
+                    const productWithId = Object.assign({ id: 'p' + Date.now() }, product);
                     const existing = JSON.parse(localStorage.getItem('dj_products') || '[]');
-                    existing.unshift(product);
+                    existing.unshift(productWithId);
                     localStorage.setItem('dj_products', JSON.stringify(existing));
-                    showToast('Producto agregado correctamente');
+                    showToast('Producto agregado localmente');
                     setTimeout(()=> window.location.href = 'products.html', 900);
                 }catch(err){
                     showToast('Error guardando el producto', 1600);
