@@ -329,6 +329,8 @@ section {
     object-position: center;
     display: block;
     margin: 0 auto;
+    border-top-left-radius: var(--radius-md);
+    border-top-right-radius: var(--radius-md);
 }
 
 /* Product images used outside card layout */
