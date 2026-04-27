@@ -77,6 +77,9 @@
         // server mode
         let useApi = false;
         let serverProducts = null;
+        // editing state
+        let editingProductId = null;
+        let editingDrafts = {};
 
         function hasPendingChanges(){ return Object.keys(pendingStockChanges).length > 0; }
         function updateCommitButtonState(){ const btn = document.getElementById('commit-stock-btn'); if(btn) btn.disabled = !hasPendingChanges(); }
@@ -95,20 +98,47 @@
                 originalStocks[p.id] = p.stock;
                 const current = (pendingStockChanges[p.id] !== undefined) ? pendingStockChanges[p.id] : p.stock;
                 const row = document.createElement('div'); row.className='product-row';
-                row.innerHTML = `
-                    <img class="product-thumb" src="${p.image || 'https://placehold.co/160x120/eee/777?text=Sin+imagen'}" alt="${p.title}">
-                    <div style="min-width:220px">
-                        <strong>${p.title}</strong>
-                        <div style="color:var(--muted);font-size:0.95rem">${p.eyebrow || ''} — ${formatCOP(p.price)}</div>
-                    </div>
-                    <div class="product-qty" style="display:flex;align-items:center;gap:8px;">
-                        <button class="btn small" data-id="${p.id}" data-action="dec">−</button>
-                        <div class="stock-display" id="stock-${p.id}" style="min-width:56px;text-align:center;font-weight:700;">${current}</div>
-                        <button class="btn small" data-id="${p.id}" data-action="inc">+</button>
-                    </div>
-                    <div class="product-actions">
-                        <button class="btn small" data-id="${p.id}" data-action="del">Eliminar</button>
-                    </div>`;
+                const isEditing = (editingProductId === p.id);
+                if (!isEditing) {
+                    row.innerHTML = `
+                        <img class="product-thumb" src="${p.image || 'https://placehold.co/160x120/eee/777?text=Sin+imagen'}" alt="${p.title}">
+                        <div style="min-width:220px">
+                            <strong>${p.title}</strong>
+                            <div style="color:var(--muted);font-size:0.95rem">${p.eyebrow || ''} — ${formatCOP(p.price)}</div>
+                        </div>
+                        <div class="product-qty" style="display:flex;align-items:center;gap:8px;">
+                            <button class="btn small" data-id="${p.id}" data-action="dec">−</button>
+                            <div class="stock-display" id="stock-${p.id}" style="min-width:56px;text-align:center;font-weight:700;">${current}</div>
+                            <button class="btn small" data-id="${p.id}" data-action="inc">+</button>
+                        </div>
+                        <div class="product-actions">
+                            <button class="btn small" data-id="${p.id}" data-action="edit">Editar</button>
+                            <button class="btn small" data-id="${p.id}" data-action="del">Eliminar</button>
+                        </div>`;
+                } else {
+                    // inline edit form
+                    const safeVal = v => (v===undefined || v===null) ? '' : String(v).replace(/"/g, '&quot;');
+                    row.innerHTML = `
+                        <div style="flex-direction:column;display:flex;gap:8px;width:100%">
+                            <div style="display:flex;gap:12px;align-items:center">
+                                <img class="product-thumb" src="${p.image || 'https://placehold.co/160x120/eee/777?text=Sin+imagen'}" alt="${p.title}">
+                                <div style="flex:1">
+                                    <label style="display:block">Título<br><input id="edit-title-${p.id}" value="${safeVal(p.title)}" style="width:100%"></label>
+                                    <label style="display:block">Categoría<br><select id="edit-eyebrow-${p.id}" style="width:100%"></select></label>
+                                </div>
+                                <div style="width:160px">
+                                    <label>Precio<br><input id="edit-price-${p.id}" value="${safeVal(p.price)}" style="width:100%"></label>
+                                    <label>Stock<br><input id="edit-stock-${p.id}" value="${safeVal(p.stock)}" style="width:100%"></label>
+                                </div>
+                            </div>
+                            <label>Imagen (URL)<br><input id="edit-image-${p.id}" value="${safeVal(p.image)}" style="width:100%"></label>
+                            <label>Descripción<br><textarea id="edit-description-${p.id}" rows="2" style="width:100%">${safeVal(p.description)}</textarea></label>
+                            <div style="display:flex;gap:8px;justify-content:flex-end">
+                                <button class="btn small" data-id="${p.id}" data-action="save-edit">Guardar</button>
+                                <button class="btn-outline small" data-id="${p.id}" data-action="cancel-edit">Cancelar</button>
+                            </div>
+                        </div>`;
+                }
 
                 if (pendingStockChanges[p.id] !== undefined && pendingStockChanges[p.id] !== p.stock){
                     row.classList.add('dirty');
@@ -117,12 +147,15 @@
                 list.appendChild(row);
             });
 
-            // attach handlers (dec/inc/del)
+            // attach handlers (dec/inc/del/edit/save-edit/cancel-edit)
             list.querySelectorAll('button[data-action]').forEach(btn => btn.addEventListener('click', (e)=>{
                 const id = btn.dataset.id; const act = btn.dataset.action;
                 if (act === 'dec') return reduceStock(id);
                 if (act === 'inc') return increaseStock(id);
                 if (act === 'del') return deleteProduct(id);
+                if (act === 'edit') return openEdit(id);
+                if (act === 'cancel-edit') return cancelEdit(id);
+                if (act === 'save-edit') return saveEditedProduct(id);
             }));
 
             updateCommitButtonState();
@@ -223,6 +256,75 @@
             if (pendingStockChanges[id] !== undefined) delete pendingStockChanges[id];
             showToast('Producto eliminado');
             renderProducts();
+        }
+
+        // --- Edit product (inline) ---
+        function openEdit(id){
+            const prods = serverProducts || loadProducts();
+            const p = prods.find(x=>x.id===id);
+            if (!p) return showToast('Producto no encontrado');
+            editingProductId = id;
+            editingDrafts[id] = Object.assign({}, p);
+            renderProducts();
+            // populate category select after render
+            setTimeout(()=>{
+                const sel = document.getElementById('edit-eyebrow-' + id);
+                if (!sel) return;
+                sel.innerHTML = '';
+                const placeholder = document.createElement('option'); placeholder.value = ''; placeholder.textContent = 'Seleccionar...'; sel.appendChild(placeholder);
+                let found = false;
+                (window.DJ_CATEGORIES || []).forEach(cat => { const o = document.createElement('option'); o.value = cat; o.textContent = cat; if ((p.eyebrow||'') === cat){ o.selected = true; found = true; } sel.appendChild(o); });
+                const other = document.createElement('option'); other.value = '__other'; other.textContent = 'Otro (especificar)'; sel.appendChild(other);
+                if (!found && p.eyebrow){ const opt = document.createElement('option'); opt.value = p.eyebrow; opt.textContent = p.eyebrow; opt.selected = true; sel.appendChild(opt); }
+            }, 40);
+        }
+
+        function cancelEdit(id){
+            if (editingProductId === id){ editingProductId = null; }
+            try{ delete editingDrafts[id]; }catch(e){}
+            renderProducts();
+        }
+
+        async function saveEditedProduct(id){
+            const titleEl = document.getElementById('edit-title-' + id);
+            if (!titleEl) return showToast('Formulario no encontrado');
+            const updated = {
+                eyebrow: (document.getElementById('edit-eyebrow-' + id)?.value || '').trim(),
+                title: (document.getElementById('edit-title-' + id)?.value || '').trim(),
+                price: parseInt((document.getElementById('edit-price-' + id)?.value || '0').toString().replace(/\D/g,''), 10) || 0,
+                stock: parseInt((document.getElementById('edit-stock-' + id)?.value || '0'), 10) || 0,
+                image: (document.getElementById('edit-image-' + id)?.value || '').trim(),
+                description: (document.getElementById('edit-description-' + id)?.value || '').trim()
+            };
+            if (!updated.title) return showToast('Título requerido', 1200);
+
+            // Try Firestore update first
+            try{
+                const fbOk = await (window.waitForFirestore ? window.waitForFirestore(4000) : Promise.resolve(false));
+                if (fbOk && window.__FIRESTORE_DB__){
+                    try{
+                        await window.__FIRESTORE_DB__.collection('products').doc(id).update(updated);
+                        // refresh list
+                        try{ const snap = await window.__FIRESTORE_DB__.collection('products').get(); serverProducts = snap.docs.map(d => ({ id: d.id, ...d.data() })); }catch(e){}
+                        editingProductId = null; delete editingDrafts[id]; showToast('Producto actualizado (Firestore)', 1400); renderProducts(); return;
+                    }catch(e){ console.error('Firestore update failed', e); }
+                }
+            }catch(e){ console.warn('waitForFirestore failed', e); }
+
+            // Try API
+            try{
+                const res = await apiFetch('/products/' + encodeURIComponent(id), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) });
+                if (res && res.ok){ const prod = await res.json(); serverProducts = (serverProducts||[]).map(p => p.id === id ? prod : p); editingProductId = null; delete editingDrafts[id]; showToast('Producto actualizado (DB)', 1400); renderProducts(); return; }
+            }catch(e){ console.error('API update failed', e); }
+
+            // Fallback: local update
+            try{
+                const prods = loadProducts() || [];
+                const idx = prods.findIndex(p=>p.id===id);
+                if (idx !== -1){ prods[idx] = Object.assign({}, prods[idx], updated, { id }); saveProducts(prods); serverProducts = prods; editingProductId = null; delete editingDrafts[id]; showToast('Producto actualizado localmente', 1200); renderProducts(); return; }
+            }catch(e){ console.error('Local update failed', e); }
+
+            showToast('No fue posible actualizar el producto', 1600);
         }
 
         document.addEventListener('DOMContentLoaded', async ()=>{
