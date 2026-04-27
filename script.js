@@ -22,74 +22,8 @@ async function apiFetch(endpoint, opts){
     return fetch(url, opts);
 }
 
-// Firestore helpers: dynamic SDK load, init and convenience writers
-window.__FIRESTORE_READY = false;
-window.__USE_FIRESTORE__ = false;
-window.__FIRESTORE_DB__ = null;
-function loadScript(url){
-    return new Promise((resolve,reject)=>{
-        const s = document.createElement('script');
-        s.src = url;
-        s.onload = () => resolve();
-        s.onerror = (e) => reject(e);
-        document.head.appendChild(s);
-    });
-}
-
-window.waitForFirestore = function(timeoutMs = 4000){
-    if (window.__FIRESTORE_INIT_PROMISE__) return window.__FIRESTORE_INIT_PROMISE__;
-    window.__FIRESTORE_INIT_PROMISE__ = (async ()=>{
-        // detect config from global var or meta tag
-        let cfg = window.__FIREBASE_CONFIG__ || null;
-        try{
-            const meta = document.querySelector && document.querySelector('meta[name="firebase-config"]');
-            if (!cfg && meta && meta.content){ try{ cfg = JSON.parse(meta.content); }catch(e){ console.warn('Invalid firebase-config meta'); cfg = null; } }
-        }catch(e){ cfg = cfg || null; }
-
-        if (!cfg) return false;
-        try{
-            await loadScript('https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js');
-            await loadScript('https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js');
-            if (!window.firebase) throw new Error('Firebase SDK not available');
-            window.firebase.initializeApp(cfg);
-            window.__FIRESTORE_DB__ = window.firebase.firestore();
-            window.__USE_FIRESTORE__ = true;
-            window.__FIRESTORE_READY = true;
-            return true;
-        }catch(err){ console.warn('Firebase init failed', err); return false; }
-    })();
-    return window.__FIRESTORE_INIT_PROMISE__;
-};
-
-// convenience write helpers (useful for admin pages)
-window.writeProductToFirestore = async function(product){
-    const ok = await window.waitForFirestore();
-    if (!ok) return null;
-    const db = window.__FIRESTORE_DB__;
-    const ref = await db.collection('products').add(product);
-    return { id: ref.id, ...product };
-};
-
-window.bulkUpdateFirestore = async function(updates){
-    const ok = await window.waitForFirestore();
-    if (!ok) return false;
-    const db = window.__FIRESTORE_DB__;
-    const batch = db.batch();
-    updates.forEach(u=>{
-        const docRef = db.collection('products').doc(u.id);
-        batch.update(docRef, { stock: u.stock });
-    });
-    await batch.commit();
-    return true;
-};
-
-window.deleteProductFirestore = async function(id){
-    const ok = await window.waitForFirestore();
-    if (!ok) return false;
-    const db = window.__FIRESTORE_DB__;
-    await db.collection('products').doc(id).delete();
-    return true;
-};
+// Firestore helpers: inicializados en firebase-config.js
+// window.waitForFirestore, window.writeProductToFirestore, etc. ya están disponibles
 
 document.addEventListener('DOMContentLoaded', () => {
     let currentCategoryFilter = '';

@@ -16,7 +16,7 @@
             <img src="https://i.imgur.com/vscZKK3.png" alt="Logo D&J Beauty Studio">
             <div class="brand-copy">
                 <h3>Panel Administrador</h3>
-                <p>Agregar Producto (demo)</p>
+                <p>Agregar Producto</p>
             </div>
         </div>
     </header>
@@ -53,7 +53,10 @@
             <main class="admin-main">
                 <div class="admin-card admin-form">
                     <h1>Agregar Producto</h1>
-                    <p class="section-copy">Formulario simple para agregar productos al catálogo (almacenado en el navegador).</p>
+                    <p class="section-copy">Completa los datos del producto. Se guardará en Firestore para que aparezca en el catálogo público.</p>
+
+                    <!-- Estado de conexión a Firestore -->
+                    <p id="db-status" style="font-size:0.9rem;margin-bottom:16px;font-weight:600;">⏳ Conectando a la base de datos...</p>
 
                     <form id="add-product-form">
                         <label>Categoria
@@ -85,7 +88,7 @@
                         </label>
 
                         <div class="button-row">
-                            <button type="submit" class="btn">Guardar producto</button>
+                            <button type="submit" class="btn" id="submit-btn">Guardar producto</button>
                             <a class="btn-outline" href="products.html">Cancelar</a>
                         </div>
                     </form>
@@ -102,7 +105,10 @@
     <script src="../firebase-config.js"></script>
     <script src="../script.js"></script>
     <script>
-        function showToast(msg, timeout = 1400){
+        // ─────────────────────────────────────────────
+        // Toast helper
+        // ─────────────────────────────────────────────
+        function showToast(msg, timeout = 2000){
             let t = document.getElementById('admin-toast');
             if (!t){
                 t = document.createElement('div');
@@ -112,80 +118,117 @@
             }
             t.textContent = msg;
             t.classList.add('show');
-            setTimeout(()=> t.classList.remove('show'), timeout);
+            setTimeout(() => t.classList.remove('show'), timeout);
         }
 
+        // ─────────────────────────────────────────────
+        // Estado de Firestore (se inicia al cargar, antes del submit)
+        // ─────────────────────────────────────────────
+        const statusEl = document.getElementById('db-status');
+        let firestoreReady = false;
+
+        // Iniciar conexión inmediatamente — no esperar al submit
+        const firestorePromise = window.waitForFirestore(8000).then(ok => {
+            firestoreReady = ok;
+            if (statusEl) {
+                if (ok) {
+                    statusEl.textContent = '🟢 Conectado a Firestore — el producto se publicará en el catálogo.';
+                    statusEl.style.color = 'green';
+                } else {
+                    statusEl.textContent = '🔴 Sin conexión a Firestore. Verifica que Firestore esté activado en Firebase Console.';
+                    statusEl.style.color = '#c0392b';
+                }
+            }
+            return ok;
+        });
+
+        // ─────────────────────────────────────────────
+        // Lógica del formulario
+        // ─────────────────────────────────────────────
         document.addEventListener('DOMContentLoaded', function(){
             const form = document.getElementById('add-product-form');
             const imgInput = document.getElementById('image-input');
             const imgPreview = document.getElementById('image-preview');
+            const submitBtn = document.getElementById('submit-btn');
 
+            // Preview de imagen
             function updatePreview(){
                 if (!imgInput || !imgPreview) return;
                 const url = imgInput.value.trim();
                 imgPreview.src = url || 'https://placehold.co/800x400/eee/777?text=Sin+imagen';
             }
-
             imgInput && imgInput.addEventListener('input', updatePreview);
+            updatePreview();
 
+            // Submit
             form && form.addEventListener('submit', async function(e){
                 e.preventDefault();
+                submitBtn.disabled = true;
+                submitBtn.textContent = 'Guardando...';
+
+                // Construir objeto producto
                 let eyebrow = (form.eyebrow.value || '').trim();
-                if (eyebrow === '__other') eyebrow = (form.eyebrow_other.value || '').trim();
-                const title = (form.title.value || '').trim();
-                const price = parseInt((form.price.value||'').toString().replace(/\D/g,''), 10) || 0;
-                const stock = parseInt(form.stock.value, 10) || 0;
-                const image = (form.image.value || '').trim();
+                if (eyebrow === '__other') eyebrow = (form.eyebrow_other ? form.eyebrow_other.value : '').trim();
+                const title       = (form.title.value || '').trim();
+                const price       = parseInt((form.price.value || '').replace(/\D/g, ''), 10) || 0;
+                const stock       = parseInt(form.stock.value, 10) || 0;
+                const image       = (form.image.value || '').trim();
                 const description = (form.description.value || '').trim();
 
-                if (!title){ showToast('Título requerido', 1200); return; }
-
-                const product = { eyebrow, title, price, stock, image, description };
-
-                async function saveToApi(prod){
-                    // Try Firestore first (if configured), then server API, then fallback
-                    try{
-                        if (window.writeProductToFirestore){
-                            try{
-                                const created = await window.writeProductToFirestore(prod);
-                                if (created) return created;
-                            }catch(e){ /* continue to next */ }
-                        }
-
-                        if (typeof apiFetch === 'function'){
-                            const res = await apiFetch('/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prod) });
-                            if (res && res.ok){ const created = await res.json(); return created; }
-                        } else {
-                            // fallback to direct fetch (relative path)
-                            const res = await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prod) });
-                            if (res.ok){ const created = await res.json(); return created; }
-                        }
-                    }catch(err){ }
-                    return null;
-                }
-
-                // Try API first, then fallback to localStorage
-                const created = await saveToApi(product);
-                if (created){
-                    showToast('Producto agregado (DB)');
-                    setTimeout(()=> window.location.href = 'products.html', 900);
+                if (!title) {
+                    showToast('El título es obligatorio');
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Guardar producto';
                     return;
                 }
 
-                try{
+                const product = { eyebrow, title, price, stock, image, description };
+
+                // ── Intento 1: Firestore ──────────────────────────────
+                // Esperamos a que la promesa de inicialización resuelva
+                // (ya debería haber resuelto, pero por si acaso)
+                try {
+                    const ok = await firestorePromise;
+                    if (ok && window.__FIRESTORE_DB__) {
+                        const db = window.__FIRESTORE_DB__;
+                        const ref = await db.collection('products').add(product);
+                        showToast('✅ Producto guardado en Firestore', 2000);
+                        setTimeout(() => window.location.href = 'products.html', 1200);
+                        return;
+                    }
+                } catch(err) {
+                    console.error('Error guardando en Firestore:', err);
+                }
+
+                // ── Intento 2: API local (server/index.js) ────────────
+                try {
+                    const res = await fetch('/api/products', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(product)
+                    });
+                    if (res.ok) {
+                        showToast('✅ Producto guardado en API local', 2000);
+                        setTimeout(() => window.location.href = 'products.html', 1200);
+                        return;
+                    }
+                } catch(err) { /* sin servidor local */ }
+
+                // ── Último recurso: localStorage (solo funciona en este navegador) ──
+                try {
                     const productWithId = Object.assign({ id: 'p' + Date.now() }, product);
                     const existing = JSON.parse(localStorage.getItem('dj_products') || '[]');
                     existing.unshift(productWithId);
                     localStorage.setItem('dj_products', JSON.stringify(existing));
-                    showToast('Producto agregado localmente');
-                    setTimeout(()=> window.location.href = 'products.html', 900);
-                }catch(err){
-                    showToast('Error guardando el producto', 1600);
+                    showToast('⚠️ Guardado SOLO localmente (Firestore no disponible)', 3000);
+                    setTimeout(() => window.location.href = 'products.html', 1800);
+                } catch(err) {
+                    showToast('❌ Error: no se pudo guardar el producto', 2500);
                 }
-            });
 
-            // initial preview
-            updatePreview();
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Guardar producto';
+            });
         });
     </script>
 </body>
