@@ -24,6 +24,8 @@ async function apiFetch(endpoint, opts){
 
 document.addEventListener('DOMContentLoaded', () => {
     let currentCategoryFilter = '';
+    // in-memory products loaded from repository db.json
+    let DJ_PRODUCTS_DATA = null;
     // 1. Marcar enlace activo en el menú
     const currentPath = window.location.pathname.split("/").pop();
     const navLinks = document.querySelectorAll('nav a'); 
@@ -104,40 +106,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadProducts() {
-        try {
-            const raw = localStorage.getItem('dj_products');
-            return raw ? JSON.parse(raw) : null;
-        } catch (err) { return null; }
+        // Return products loaded from the repository `db.json` (synchronous accessor)
+        return DJ_PRODUCTS_DATA || [];
     }
 
     function saveProducts(arr) {
-        try { localStorage.setItem('dj_products', JSON.stringify(arr || [])); } catch (e) {}
+        // Intentionally no-op for repo-backed reads to avoid storing per-browser copies.
+        // Kept for compatibility but does not change the repository.
+        try { /* no-op */ } catch (e) {}
     }
 
     function ensureProductData() {
-        let prods = loadProducts();
-        if (!prods) {
-            const grid = document.querySelector('.grid-container');
-            if (grid) {
-                const cards = Array.from(grid.querySelectorAll('.card'));
-                prods = cards.map((card, idx) => {
-                    const imgEl = card.querySelector('img');
-                    const eyebrow = card.querySelector('.eyebrow')?.innerText?.trim() || '';
-                    const title = card.querySelector('h3')?.innerText?.trim() || '';
-                    const priceEl = card.querySelector('.price')?.innerText || '';
-                    const priceMatch = (priceEl.match(/(\d[\d.]*)/) || [])[1] || card.dataset.price || '0';
-                    const price = parseInt(priceMatch.toString().replace(/\D/g, ''), 10) || 0;
-                    const stockText = card.querySelector('.stock')?.innerText || '';
-                    const stockMatch = stockText.match(/(\d+)/);
-                    const stock = stockMatch ? parseInt(stockMatch[1], 10) : 0;
-                    const image = imgEl ? imgEl.src : '';
-                    return { id: 'p' + Date.now() + idx, eyebrow, title, price, stock, image, description: '' };
-                });
-            } else {
-                prods = [];
-            }
-            saveProducts(prods);
-        }
+        // Repo-backed mode: do not seed from DOM/localStorage. If no products loaded, return empty list.
+        const prods = loadProducts() || [];
         return prods;
     }
 
@@ -193,25 +174,37 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Inicializar productos y UI de filtros
-    populateCategorySelects();
-    ensureProductData();
-    createCategoryFilterUI();
-    renderProducts();
-
-    // Try to load products from API (if server is running) and refresh UI
-    (async function tryLoadFromApi(){
-        try{
-            const res = await apiFetch('/products');
-            if (res && res.ok){
-                const prods = await res.json();
-                if (Array.isArray(prods)){
-                    saveProducts(prods);
-                    createCategoryFilterUI();
-                    renderProducts();
+    // Inicializar productos y UI de filtros usando únicamente `db.json` del repositorio.
+    (async function initRepoProducts(){
+        populateCategorySelects();
+        // Try repo-configured URL (meta[name="repo-base"] or window.__REPO_BASE__), then /db.json
+        const repoBaseMeta = document.querySelector('meta[name="repo-base"]')?.content || window.__REPO_BASE__ || '';
+        const candidates = [];
+        if (repoBaseMeta) candidates.push(repoBaseMeta.replace(/\/$/, '') + '/db.json');
+        candidates.push('/db.json');
+        // Try candidates sequentially
+        let loaded = false;
+        for (const url of candidates){
+            try{
+                const r = await fetch(url, { cache: 'no-cache' });
+                if (r && r.ok){
+                    const data = await r.json();
+                    // support both { products: [...] } and plain array
+                    DJ_PRODUCTS_DATA = Array.isArray(data) ? data : (data.products || []);
+                    loaded = true;
+                    break;
                 }
-            }
-        }catch(e){ /* ignore if API not available */ }
+            }catch(e){ /* ignore and try next */ }
+        }
+
+        if (!loaded){
+            // No repo DB found — show empty state but do not read localStorage
+            DJ_PRODUCTS_DATA = [];
+            console.warn('No repository db.json found; site will show no products.');
+        }
+
+        createCategoryFilterUI();
+        renderProducts();
     })();
 
     // 3. Funcionalidad de Botones "Añadir al Carrito" -> carrito funcional

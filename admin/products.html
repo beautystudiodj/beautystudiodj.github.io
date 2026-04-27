@@ -61,9 +61,10 @@
         async function apiFetch(endpoint, opts){ const base = getApiBase(); const url = (base ? base.replace(/\/$/, '') + '/api' : '/api') + endpoint; return fetch(url, opts); }
 
         function loadProducts(){
-            try{ return JSON.parse(localStorage.getItem('dj_products')||'[]'); }catch(e){ return []; }
+            // Return products loaded from repository or API (serverProducts)
+            return serverProducts || [];
         }
-        function saveProducts(arr){ try{ localStorage.setItem('dj_products', JSON.stringify(arr||[])); }catch(e){}
+        function saveProducts(arr){ try{ /* intentionally no-op for repo-backed reads */ }catch(e){}
         }
         function formatCOP(num){ return 'COP $' + (num||0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
         function showToast(msg, timeout=1200){ let t=document.getElementById('admin-toast'); if(!t){ t=document.createElement('div'); t.id='admin-toast'; t.className='toast'; document.body.appendChild(t);} t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'), timeout); }
@@ -205,11 +206,29 @@
         }
 
         document.addEventListener('DOMContentLoaded', async ()=>{
-            // try to use API; if available, load server products
+            // Try API first, then fallback to the repository db.json file (repo-base or /db.json)
             try{
                 const res = await apiFetch('/products');
                 if (res && res.ok){ serverProducts = await res.json(); useApi = true; }
             }catch(e){ useApi = false; serverProducts = null; }
+
+            if (!serverProducts || !serverProducts.length){
+                // try repo db.json
+                const repoBase = document.querySelector('meta[name="repo-base"]')?.content || window.__REPO_BASE__ || '';
+                const candidates = [];
+                if (repoBase) candidates.push(repoBase.replace(/\/$/, '') + '/db.json');
+                candidates.push('/db.json');
+                for (const url of candidates){
+                    try{
+                        const r = await fetch(url, { cache: 'no-cache' });
+                        if (r && r.ok){
+                            const data = await r.json();
+                            serverProducts = Array.isArray(data) ? data : (data.products || []);
+                            break;
+                        }
+                    }catch(err){ /* try next */ }
+                }
+            }
 
             renderProducts();
 
