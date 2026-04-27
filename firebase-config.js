@@ -1,16 +1,12 @@
-// Firebase config y inicialización directa
-// Este archivo carga el SDK y deja window.__FIRESTORE_DB__ listo para usar
-
+// Firebase config y inicialización directa - proyecto: beautystudio-dj
 (function () {
     const cfg = {
-        apiKey: "AIzaSyDY4tD7jQDrDortHqJKgwp_C_y4MtGjPmw",
-        authDomain: "base-de-datos-6e1e4.firebaseapp.com",
-        databaseURL: "https://base-de-datos-6e1e4-default-rtdb.firebaseio.com",
-        projectId: "base-de-datos-6e1e4",
-        storageBucket: "base-de-datos-6e1e4.firebasestorage.app",
-        messagingSenderId: "622391959093",
-        appId: "1:622391959093:web:d4abf7f195079348159b7c",
-        measurementId: "G-31WHFJP1XH"
+        apiKey: "AIzaSyBHipLnuxtYDGT8PIS3ijIobo4iE-zlJDY",
+        authDomain: "beautystudio-dj.firebaseapp.com",
+        projectId: "beautystudio-dj",
+        storageBucket: "beautystudio-dj.firebasestorage.app",
+        messagingSenderId: "1027229175042",
+        appId: "1:1027229175042:web:d2cd873601e1a2b11ac61b"
     };
 
     window.__FIREBASE_CONFIG__ = cfg;
@@ -26,7 +22,6 @@
         });
     }
 
-    // Promesa única compartida por todo el sitio
     window.__FIRESTORE_INIT_PROMISE__ = (async function () {
         try {
             await loadScript('https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js');
@@ -38,7 +33,7 @@
             window.__FIRESTORE_DB__ = window.firebase.firestore();
             window.__USE_FIRESTORE__ = true;
             window.__FIRESTORE_READY = true;
-            console.log('%c Firestore conectado ', 'background:#188038;color:#fff;padding:2px 6px;border-radius:3px;');
+            console.log('%c Firestore conectado ✓ ', 'background:#188038;color:#fff;padding:2px 6px;border-radius:3px;');
             return true;
         } catch (err) {
             console.warn('Firebase init failed:', err);
@@ -47,7 +42,6 @@
         }
     })();
 
-    // waitForFirestore ahora simplemente devuelve la promesa ya iniciada
     window.waitForFirestore = function () {
         return window.__FIRESTORE_INIT_PROMISE__;
     };
