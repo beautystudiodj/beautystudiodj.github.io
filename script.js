@@ -294,6 +294,60 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- Best sellers widget: choose random products and persist selection for 5 days ---
+    function renderBestSellersItems(items, container){
+        container.innerHTML = '';
+        items.forEach(prod => {
+            const div = document.createElement('div');
+            div.className = 'card';
+            div.innerHTML = `
+                <img src="${escapeHtml(prod.image || 'https://placehold.co/500x360/ddd/000?text=Sin+imagen')}" class="card-img-top" alt="${escapeHtml(prod.title)}">
+                <div class="card-body">
+                    <span class="eyebrow">${escapeHtml(prod.eyebrow || '')}</span>
+                    <h3>${escapeHtml(prod.title || '')}</h3>
+                    <p class="price">${formatCOP(prod.price || 0)}</p>
+                    <a href="productos.html" class="btn">Ver producto</a>
+                </div>`;
+            container.appendChild(div);
+        });
+    }
+
+    function renderBestSellersWidget(count = 3){
+        const container = document.getElementById('best-sellers-grid');
+        if (!container) return;
+        const key = 'dj_best_sellers_v1';
+        try{
+            const raw = localStorage.getItem(key);
+            if (raw){
+                const parsed = JSON.parse(raw);
+                const age = Date.now() - (parsed.timestamp || 0);
+                const fiveDays = 5 * 24 * 60 * 60 * 1000;
+                if (parsed && parsed.items && Array.isArray(parsed.items) && age < fiveDays){
+                    renderBestSellersItems(parsed.items, container);
+                    return;
+                }
+            }
+        }catch(e){ /* ignore and reselect */ }
+
+        const products = loadProducts() || [];
+        let items = [];
+        if (products.length === 0){
+            items = [
+                { eyebrow: 'Best seller', title: 'Labial Lip Crush Velvet', price: 18900, image: 'https://placehold.co/500x360/810319/ffffff?text=Lip+Crush' },
+                { eyebrow: 'Nuevo', title: 'Serum Glass Skin 24h', price: 27500, image: 'https://placehold.co/500x360/4f0012/ffffff?text=Glass+Skin' },
+                { eyebrow: 'Edición limitada', title: 'Paleta Nude Attraction', price: 33000, image: 'https://placehold.co/500x360/a00927/ffffff?text=Eyes+Nude' }
+            ];
+        } else {
+            // shuffle copy and pick first N
+            const copy = products.slice();
+            for (let i = copy.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [copy[i], copy[j]] = [copy[j], copy[i]]; }
+            items = copy.slice(0, Math.min(count, copy.length)).map(p => ({ id: p.id||null, eyebrow: p.eyebrow||'', title: p.title||'', price: p.price||0, image: p.image||'', description: p.description||'', stock: p.stock||0 }));
+        }
+
+        try{ localStorage.setItem(key, JSON.stringify({ timestamp: Date.now(), items })); }catch(e){ /* ignore storage errors */ }
+        renderBestSellersItems(items, container);
+    }
+
     // Inicializar productos y UI de filtros: preferir Firestore, si no cae a db.json del repo
     (async function initRepoProducts(){
         populateCategorySelects();
@@ -307,6 +361,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     DJ_PRODUCTS_DATA = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                     createCategoryFilterUI();
                     renderProducts();
+                    renderBestSellersWidget();
                 }, err => {
                     console.warn('Firestore products snapshot error', err);
                 });
@@ -339,6 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         createCategoryFilterUI();
         renderProducts();
+        renderBestSellersWidget();
     })();
 
     // 3. Funcionalidad de Botones "Añadir al Carrito" -> carrito funcional
