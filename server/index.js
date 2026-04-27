@@ -63,6 +63,63 @@ app.post('/api/products/bulk-stock', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Invoices endpoints
+app.get('/api/invoices', async (req, res) => {
+  const db = await readDb();
+  res.json(db.invoices || []);
+});
+
+app.post('/api/invoices', async (req, res) => {
+  const body = req.body || {};
+  const db = await readDb();
+  db.invoices = db.invoices || [];
+  const id = 'inv' + Date.now() + Math.floor(Math.random()*900 + 100);
+  const inv = Object.assign({ id }, body, { createdAt: body.createdAt || Date.now(), status: body.status || 'pending' });
+  db.invoices.unshift(inv);
+  await writeDb(db);
+  res.status(201).json(inv);
+});
+
+app.put('/api/invoices/:id', async (req, res) => {
+  const id = req.params.id;
+  const body = req.body || {};
+  const db = await readDb();
+  db.invoices = db.invoices || [];
+  const idx = db.invoices.findIndex(i => i.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'not found' });
+  db.invoices[idx] = Object.assign({}, db.invoices[idx], body, { id });
+  await writeDb(db);
+  res.json(db.invoices[idx]);
+});
+
+// Confirm invoice: deduct stock for invoice items and mark invoice confirmed
+app.post('/api/invoices/:id/confirm', async (req, res) => {
+  const id = req.params.id;
+  const db = await readDb();
+  db.invoices = db.invoices || [];
+  db.products = db.products || [];
+  const idx = db.invoices.findIndex(i => i.id === id);
+  if (idx === -1) return res.status(404).json({ error: 'not found' });
+  const inv = db.invoices[idx];
+  // for each item, find product and decrement stock
+  (inv.items || []).forEach(item => {
+    const pid = item.id || null;
+    let pidx = -1;
+    if (pid) pidx = db.products.findIndex(p => p.id === pid);
+    if (pidx === -1 && item.name) pidx = db.products.findIndex(p => (p.title||p.name||'') === item.name);
+    if (pidx !== -1){
+      const cur = Number(db.products[pidx].stock || 0);
+      const qty = Number(item.qty || 0);
+      db.products[pidx].stock = Math.max(0, cur - qty);
+    }
+  });
+  inv.status = 'confirmed';
+  inv.confirmedAt = Date.now();
+  db.invoices[idx] = inv;
+  await writeDb(db);
+  res.json({ invoice: inv });
+});
+
 app.delete('/api/products/:id', async (req, res) => {
   const id = req.params.id;
   const db = await readDb();

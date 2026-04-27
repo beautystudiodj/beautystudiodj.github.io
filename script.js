@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentCategoryFilter = '';
     let currentSort = '';
     let currentSearch = '';
+    let adminOffersActive = false; // when true, edit controls are shown (admin panel)
     // in-memory products loaded from repository db.json
     let DJ_PRODUCTS_DATA = null;
     // 1. Marcar enlace activo en el menú
@@ -208,8 +209,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function loadProducts() {
-        // Return products loaded from the repository `db.json` (synchronous accessor)
-        return DJ_PRODUCTS_DATA || [];
+        // Return products loaded from the repository `db.json` (synchronous accessor).
+        // Merge any local overrides (fallback when no server/Firestore available).
+        const prods = DJ_PRODUCTS_DATA ? DJ_PRODUCTS_DATA.slice() : [];
+        try {
+            const raw = localStorage.getItem('dj_local_product_updates');
+            if (raw) {
+                const map = JSON.parse(raw);
+                prods.forEach(p => {
+                    const key = p.id || p.title || '';
+                    if (key && map[key]) Object.assign(p, map[key]);
+                });
+            }
+        } catch(e) { /* ignore local overrides errors */ }
+        return prods;
     }
 
     function saveProducts(arr) {
@@ -225,11 +238,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatCOP(num) {
-        return 'COP $' + num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        return '$' + num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
     }
 
     function escapeHtml(text) {
         return (text || '').replace(/[&"'<>]/g, function (a) { return {'&':'&amp;','"':'&quot;',"'":'&#39;','<':'&lt;','>':'&gt;'}[a]; });
+    }
+
+    // Returns the computed discounted price for a product (uses `discountPercentage` when present)
+    function getDiscountedPrice(p){
+        const price = Number((p && p.price) || 0);
+        const dp = Number((p && p.discountPercentage) || 0);
+        if (dp > 0) return Math.round(price * (100 - dp) / 100);
+        return price;
     }
 
     function getQueryParam(name){
@@ -263,29 +284,47 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Apply sorting if requested
+        // Apply sorting if requested (sort by effective price when discounts present)
         if (currentSort === 'price-asc'){
-            items = items.slice().sort((a,b)=> (Number(a.price)||0) - (Number(b.price)||0));
+            items = items.slice().sort((a,b)=> (Number(getDiscountedPrice(a))||0) - (Number(getDiscountedPrice(b))||0));
         } else if (currentSort === 'price-desc'){
-            items = items.slice().sort((a,b)=> (Number(b.price)||0) - (Number(a.price)||0));
+            items = items.slice().sort((a,b)=> (Number(getDiscountedPrice(b))||0) - (Number(getDiscountedPrice(a))||0));
         }
         grid.innerHTML = '';
         items.forEach((prod, idx) => {
             const div = document.createElement('div');
             div.className = 'card';
-            div.dataset.price = prod.price || '0';
+            const discounted = getDiscountedPrice(prod);
+            div.dataset.price = discounted || '0';
+            div.dataset.index = idx;
+            div.dataset.id = prod.id || '';
             const link = prod.id ? `product.html?id=${encodeURIComponent(prod.id)}` : `product.html?idx=${idx}`;
+
+            // price presentation: show original crossed-out + discounted price when applicable
+            const originalPrice = Number(prod.price || 0);
+            let priceHtml = '';
+            if (prod.discountPercentage && Number(prod.discountPercentage) > 0){
+                priceHtml = `<div class="price-row"><span class="price-original">${formatCOP(originalPrice)}</span><span class="price price-discount">${formatCOP(discounted)}</span></div><div class="offer-badge" aria-hidden="true" style="position:absolute;top:10px;left:10px;background:var(--wine-700);color:#fff;padding:6px 8px;border-radius:8px;font-weight:800">-${Number(prod.discountPercentage)}%</div>`;
+            } else {
+                priceHtml = `<p class="price">${formatCOP(originalPrice)}</p>`;
+            }
+
             div.innerHTML = `
                 <a href="${link}" class="card-link"><img src="${escapeHtml(prod.image || 'https://placehold.co/500x360/ddd/000?text=Sin+imagen')}" class="card-img-top" alt="${escapeHtml(prod.title)}"></a>
                 <div class="card-body">
                     <span class="eyebrow">${escapeHtml(prod.eyebrow || '')}</span>
                     <h3><a href="${link}">${escapeHtml(prod.title)}</a></h3>
-                    <p class="price">${formatCOP(prod.price || 0)}</p>
+                    ${priceHtml}
                     <p class="stock">Disponibles: ${prod.stock || 0} unidades</p>
-                    <button class="btn btn-buy">Añadir al Carrito</button>
+                    <div style="display:flex;gap:8px">
+                        <button class="btn btn-buy">Añadir al Carrito</button>
+                        ${sessionStorage.getItem('admin_authed') && adminOffersActive ? '<button class="btn btn-edit-offer">Editar oferta</button>' : ''}
+                    </div>
                 </div>`;
             grid.appendChild(div);
         });
+            // adjust title alignment: center when fits, left when truncated
+            try{ adjustCardTitleAlignment && adjustCardTitleAlignment(grid); }catch(e){}
         // attach buy handlers for newly rendered items
         const botonesCompra = grid.querySelectorAll('.btn-buy');
         botonesCompra.forEach(btn => {
@@ -297,6 +336,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 addItemToCart({ name: producto, price });
             });
         });
+        // attach edit handlers if admin
+        if (sessionStorage.getItem('admin_authed')){
+            const edits = grid.querySelectorAll('.btn-edit-offer');
+            edits.forEach((btn) => {
+                btn.addEventListener('click', (e)=>{
+                    e.preventDefault();
+                    const card = btn.closest('.card');
+                    const idx = parseInt(card.dataset.index, 10);
+                    const prod = (loadProducts()||[])[idx];
+                    openOfferEditor(card, prod, idx);
+                });
+            });
+        }
+        // ensure no card-level viewer counters remain (viewer counters only on detail pages)
+        try{ removeCardViewerCounters && removeCardViewerCounters(); }catch(e){}
+        try{ cleanupViewerTimers && cleanupViewerTimers(); }catch(e){}
     }
 
     // --- Best sellers widget: choose random products and persist selection for 5 days ---
@@ -306,17 +361,22 @@ document.addEventListener('DOMContentLoaded', () => {
             const div = document.createElement('div');
             div.className = 'card best-card';
             const link = prod.id ? `product.html?id=${encodeURIComponent(prod.id)}` : `product.html?title=${encodeURIComponent(prod.title||'')}`;
+            const originalPrice = Number(prod.price || 0);
+            const discounted = getDiscountedPrice(prod);
+            // Build price HTML (to be placed inside card body so it matches other product cards)
+            const priceHtml = (prod.discountPercentage && Number(prod.discountPercentage) > 0) ? (`<div class="price-row"><span class="price-original">${formatCOP(originalPrice)}</span><span class="price price-discount">${formatCOP(discounted)}</span></div>`) : (`<p class="price">${formatCOP(originalPrice)}</p>`);
+
             div.innerHTML = `
-                <div class="best-badge" aria-hidden="true">TOP</div>
                 <a href="${link}" class="card-link"><img src="${escapeHtml(prod.image || 'https://placehold.co/500x360/ddd/000?text=Sin+imagen')}" class="card-img-top" alt="${escapeHtml(prod.title)}"></a>
                 <div class="card-body">
                     <span class="eyebrow">${escapeHtml(prod.eyebrow || '')}</span>
                     <h3><a href="${link}">${escapeHtml(prod.title || '')}</a></h3>
-                    <p class="price">${formatCOP(prod.price || 0)}</p>
+                    ${priceHtml}
                     <div class="best-cta-row">
-                        <button type="button" class="btn buy-now" data-title="${escapeHtml(prod.title || '')}" data-price="${Number(prod.price || 0)}" aria-label="Comprar ${escapeHtml(prod.title || '')}">Comprar ahora</button>
+                        <button type="button" class="btn buy-now" data-title="${escapeHtml(prod.title || '')}" data-price="${Number(discounted || originalPrice)}" aria-label="Comprar ${escapeHtml(prod.title || '')}">Comprar ahora</button>
                     </div>
-                </div>`;
+                </div>
+                <div class="best-badge" aria-hidden="true">TOP</div>`;
             // Attach click handler to add to cart
             container.appendChild(div);
             const buyBtn = div.querySelector('.buy-now');
@@ -330,6 +390,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
         });
+        // after rendering best-sellers, adjust title alignment
+        try{ adjustCardTitleAlignment && adjustCardTitleAlignment(container); }catch(e){}
+        // viewer counters only shown on product detail pages
     }
 
     function renderBestSellersWidget(count = 3){
@@ -368,6 +431,20 @@ document.addEventListener('DOMContentLoaded', () => {
         renderBestSellersItems(items, container);
     }
 
+    // Center titles if they fully fit; left-align when truncated so the start is visible
+    function adjustCardTitleAlignment(root){
+        try{
+            const scope = root || document;
+            const anchors = Array.from((scope.querySelectorAll && scope.querySelectorAll('.card h3 a')) || []);
+            anchors.forEach(a => {
+                a.classList.remove('title-left','title-centered');
+                // force layout read
+                const isOverflowing = (a.scrollWidth > a.clientWidth + 1);
+                if (isOverflowing) a.classList.add('title-left'); else a.classList.add('title-centered');
+            });
+        }catch(e){ /* ignore */ }
+    }
+
     // --- Recent products and full catalog rendering ---
     function getProductTimestamp(p){
         if (!p) return 0;
@@ -404,17 +481,99 @@ document.addEventListener('DOMContentLoaded', () => {
         items.forEach((prod, idx) => {
             const div = document.createElement('div');
             div.className = 'card';
-            div.dataset.price = prod.price || '0';
+            const discounted = getDiscountedPrice(prod);
+            div.dataset.price = discounted || '0';
             const link = prod.id ? `product.html?id=${encodeURIComponent(prod.id)}` : `product.html?idx=${idx}`;
+            const originalPrice = Number(prod.price || 0);
+            const priceHtml = (prod.discountPercentage && Number(prod.discountPercentage) > 0) ? (`<div class="price-row"><span class="price-original">${formatCOP(originalPrice)}</span><span class="price price-discount">${formatCOP(discounted)}</span></div>`) : (`<p class="price">${formatCOP(originalPrice)}</p>`);
             div.innerHTML = `
                 <a href="${link}" class="card-link"><img src="${escapeHtml(prod.image || 'https://placehold.co/500x360/ddd/000?text=Sin+imagen')}" class="card-img-top" alt="${escapeHtml(prod.title)}"></a>
                 <div class="card-body">
                     <span class="eyebrow">${escapeHtml(prod.eyebrow || '')}</span>
                     <h3><a href="${link}">${escapeHtml(prod.title || '')}</a></h3>
-                    <p class="price">${formatCOP(prod.price || 0)}</p>
+                    ${priceHtml}
                     <a href="${link}" class="btn">Ver producto</a>
                 </div>`;
             container.appendChild(div);
+        });
+        // viewer counters only shown on product detail pages
+    }
+
+    /* Viewer counters simulation: small random walk (1..50) updating every 4-5s */
+    function cleanupViewerTimers(){
+        if (!window.__VIEWER_TIMERS__) window.__VIEWER_TIMERS__ = {};
+        const map = window.__VIEWER_TIMERS__;
+        Object.keys(map).forEach(id => {
+            const el = document.querySelector('[data-viewer-id="' + id + '"]');
+            if (!el){
+                const t = map[id];
+                try{ if (t && t.timerId) clearTimeout(t.timerId); }catch(e){}
+                try{ if (t && t.intervalId) clearInterval(t.intervalId); }catch(e){}
+                delete map[id];
+            }
+        });
+    }
+
+    function startViewerForElement(el){
+        if (!el) return;
+        if (!window.__VIEWER_TIMERS__) window.__VIEWER_TIMERS__ = {};
+        if (el.dataset.viewerId && window.__VIEWER_TIMERS__[el.dataset.viewerId]) return; // already running
+        const id = el.dataset.viewerId || ('v' + Math.random().toString(36).slice(2,9));
+        el.dataset.viewerId = id;
+        const initial = Math.floor(Math.random()*50) + 1;
+        window.__VIEWER_TIMERS__[id] = { value: initial, timerId: null };
+
+        function doUpdate(){
+            const cur = Number(window.__VIEWER_TIMERS__[id].value) || 1;
+            const delta = Math.floor(Math.random()*5) - 2; // -2..+2
+            let next = cur + delta;
+            if (next < 1) next = 1;
+            if (next > 50) next = 50;
+            window.__VIEWER_TIMERS__[id].value = next;
+            el.innerHTML = `<span class="eye">👀</span> ${next} ${next===1? 'persona está viendo' : 'personas viendo'} esto ahora`;
+            el.classList.add('viewer-update');
+            setTimeout(()=> el.classList.remove('viewer-update'), 700);
+            const delay = 4000 + Math.floor(Math.random()*1000);
+            window.__VIEWER_TIMERS__[id].timerId = setTimeout(doUpdate, delay);
+        }
+
+        // initial render + schedule
+        el.innerHTML = `<span class="eye">👀</span> ${initial} ${initial===1? 'persona está viendo' : 'personas viendo'} esto ahora`;
+        const firstDelay = 4000 + Math.floor(Math.random()*1000);
+        window.__VIEWER_TIMERS__[id].timerId = setTimeout(doUpdate, firstDelay);
+    }
+
+    function removeCardViewerCounters(){
+        // remove any existing viewer counters inside product cards and clear their timers
+        try{
+            const els = Array.from(document.querySelectorAll('.card .viewer-count'));
+            if (!els.length) return;
+            if (!window.__VIEWER_TIMERS__) window.__VIEWER_TIMERS__ = {};
+            els.forEach(el => {
+                const id = el.dataset.viewerId;
+                if (id && window.__VIEWER_TIMERS__ && window.__VIEWER_TIMERS__[id]){
+                    try{ clearTimeout(window.__VIEWER_TIMERS__[id].timerId); }catch(e){}
+                    try{ clearInterval(window.__VIEWER_TIMERS__[id].intervalId); }catch(e){}
+                    delete window.__VIEWER_TIMERS__[id];
+                }
+                try{ el.remove(); }catch(e){}
+            });
+        }catch(e){/* ignore */}
+    }
+
+    function attachViewerCounters(){
+        // Only attach viewer counters to product detail views (`.product-info`) —
+        // cards should not show this counter.
+        cleanupViewerTimers();
+        const productInfos = Array.from(document.querySelectorAll('.product-info'));
+        productInfos.forEach(pi => {
+            if (pi.querySelector('.viewer-count')) return;
+            const div = document.createElement('div');
+            div.className = 'viewer-count';
+            const ref = pi.querySelector('.eyebrow') || pi.querySelector('h1') || pi.firstChild;
+            if (ref && ref.parentNode) ref.insertAdjacentElement('afterend', div);
+            else pi.appendChild(div);
+            startViewerForElement(div);
         });
     }
 
@@ -538,6 +697,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (!prod){ container.innerHTML = '<p style="color:var(--muted)">Producto no encontrado.</p>'; return; }
 
+        const discounted = getDiscountedPrice(prod);
+        const originalPrice = Number(prod.price || 0);
+        const detailPriceHtml = (prod.discountPercentage && Number(prod.discountPercentage) > 0) ? (`<div class="price-row"><span class="price-original">${formatCOP(originalPrice)}</span><span class="price price-discount" style="font-weight:900">${formatCOP(discounted)}</span></div><div class="offer-badge" style="display:inline-block;margin-top:8px;background:var(--wine-700);color:#fff;padding:6px 8px;border-radius:8px;font-weight:800">-${Number(prod.discountPercentage)}%</div>`) : (`<p class="price">${formatCOP(originalPrice)}</p>`);
+
         const html = `
             <div class="product-detail">
                 <div class="product-gallery">
@@ -546,7 +709,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="product-info">
                     <span class="eyebrow">${escapeHtml(prod.eyebrow || '')}</span>
                     <h1>${escapeHtml(prod.title || '')}</h1>
-                    <p class="price">${formatCOP(prod.price || 0)}</p>
+                    ${detailPriceHtml}
                     <p class="description" style="color:var(--muted);line-height:1.6">${escapeHtml(prod.description || '')}</p>
                     <div class="qty-row">
                         <button id="qty-minus" class="qty-btn" aria-label="Disminuir cantidad">−</button>
@@ -562,6 +725,9 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>`;
         container.innerHTML = html;
 
+        // attach viewer counter for product detail
+        try{ attachViewerCounters(); }catch(e){ /* ignore if helper not yet present */ }
+
         const qtyInput = document.getElementById('qty-input');
         const minus = document.getElementById('qty-minus');
         const plus = document.getElementById('qty-plus');
@@ -572,13 +738,369 @@ document.addEventListener('DOMContentLoaded', () => {
         addBtn && addBtn.addEventListener('click', (e) => {
             e.preventDefault();
             const qty = Math.max(1, Number(qtyInput.value) || 1);
-            addItemToCart({ name: prod.title || '', price: Number(prod.price || 0), qty });
+            const price = getDiscountedPrice(prod) || Number(prod.price || 0);
+            addItemToCart({ name: prod.title || '', price, qty });
         });
     }
 
     // Inicializar productos y UI de filtros: preferir Firestore, si no cae a db.json del repo
+    
+    // Persistencia del descuento: intenta Firestore -> API -> localStorage
+    async function persistProductDiscount(prod, percent){
+        if (!prod) return false;
+        const p = Number(percent) || 0;
+        // 1) Firestore
+        try{
+            if (window.__FIRESTORE_DB__ && prod.id){
+                await window.__FIRESTORE_DB__.collection('products').doc(String(prod.id)).update({ discountPercentage: p });
+                console.log('[DJ] Discount updated in Firestore for', prod.id, p);
+                return true;
+            }
+        }catch(e){ console.warn('Firestore update failed', e); }
+
+        // 2) Remote API
+        try{
+            if (prod.id){
+                const resp = await apiFetch(`/products/${encodeURIComponent(String(prod.id))}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ discountPercentage: p })
+                });
+                if (resp && resp.ok){
+                    try{ const json = await resp.json();
+                        // merge returned product into memory if possible
+                        if (json && json.id){
+                            const idx = (DJ_PRODUCTS_DATA || []).findIndex(x => String(x.id) === String(json.id));
+                            if (idx !== -1) DJ_PRODUCTS_DATA[idx] = Object.assign({}, DJ_PRODUCTS_DATA[idx], json);
+                        }
+                    }catch(e){}
+                    console.log('[DJ] Discount updated via API for', prod.id, p);
+                    return true;
+                }
+            }
+        }catch(e){ console.warn('API update failed', e); }
+
+        // 3) Fallback: localStorage map of overrides
+        try{
+            const key = prod.id || prod.title || ('idx_' + ((DJ_PRODUCTS_DATA||[]).indexOf(prod)));
+            const raw = localStorage.getItem('dj_local_product_updates') || '{}';
+            const map = JSON.parse(raw || '{}');
+            map[key] = Object.assign({}, map[key] || {}, { discountPercentage: p });
+            localStorage.setItem('dj_local_product_updates', JSON.stringify(map));
+            // apply in-memory
+            const inprod = (DJ_PRODUCTS_DATA || []).find(x => (x.id && String(x.id) === String(prod.id)) || (x.title === prod.title));
+            if (inprod) inprod.discountPercentage = p;
+            console.log('[DJ] Discount saved locally for', key, p);
+            return true;
+        }catch(e){ console.warn('localStorage persist failed', e); }
+
+        return false;
+    }
+
+    // Aplica descuento a producto (por id o por índice)
+    async function applyDiscountToProduct(identifier, percent){
+        let prod = null;
+        if (typeof identifier === 'number'){
+            prod = (DJ_PRODUCTS_DATA || [])[identifier];
+        } else {
+            prod = (DJ_PRODUCTS_DATA || []).find(p => String(p.id) === String(identifier) || p.title === identifier);
+        }
+        if (!prod) return false;
+        prod.discountPercentage = Number(percent) || 0;
+        // persist
+        const ok = await persistProductDiscount(prod, prod.discountPercentage);
+        // re-render relevant areas
+        try{ renderProducts(); }catch(e){}
+        try{ renderAllProducts(); }catch(e){}
+        try{ renderBestSellersWidget(); }catch(e){}
+        try{ tryRenderProductDetail(); }catch(e){}
+        return ok;
+    }
+
+    // Editor inline para ofertas dentro de cada tarjeta (admin)
+    function openOfferEditor(cardEl, prod, idx){
+        if (!cardEl || !prod) return;
+        // close existing editors
+        Array.from(document.querySelectorAll('.offer-editor')).forEach(x => x.remove());
+        const editor = document.createElement('div');
+        editor.className = 'offer-editor';
+        editor.style.marginTop = '10px';
+        const initial = Number(prod.discountPercentage) || 0;
+        editor.innerHTML = `
+            <label style="display:flex;align-items:center;gap:8px"><span>Descuento %</span><input type="number" min="0" max="100" value="${initial}" class="offer-percent" style="width:80px;padding:6px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)" /></label>
+            <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+                <div class="offer-preview" style="font-weight:800;color:var(--wine-700)">${formatCOP(getDiscountedPrice(prod))}</div>
+                <button class="btn btn-save-offer">Guardar</button>
+                <button class="btn-outline btn-cancel-offer">Cancelar</button>
+            </div>`;
+        const body = cardEl.querySelector('.card-body') || cardEl;
+        body.appendChild(editor);
+        const input = editor.querySelector('.offer-percent');
+        const preview = editor.querySelector('.offer-preview');
+        function updatePreview(){
+            const val = Math.max(0, Math.min(100, Number(input.value) || 0));
+            const temp = Object.assign({}, prod, { discountPercentage: val });
+            preview.textContent = formatCOP(getDiscountedPrice(temp));
+        }
+        input.addEventListener('input', updatePreview);
+        editor.querySelector('.btn-cancel-offer').addEventListener('click', () => editor.remove());
+        editor.querySelector('.btn-save-offer').addEventListener('click', async () => {
+            const val = Math.max(0, Math.min(100, Number(input.value) || 0));
+            await applyDiscountToProduct(prod.id || idx, val);
+            editor.remove();
+        });
+        updatePreview();
+    }
+
+    // -----------------------------
+    // Invoices: generator + admin manager
+    // -----------------------------
+    function createInvoiceFromCart(){
+        const id = 'inv' + Date.now() + Math.floor(Math.random()*900 + 100);
+        const items = (cart || []).map(it => {
+            const prod = (DJ_PRODUCTS_DATA || []).find(p => (p.title || p.name) === it.name);
+            return {
+                id: (prod && prod.id) ? prod.id : (it.id || null),
+                name: it.name,
+                unitPrice: Number(it.price) || 0,
+                qty: Number(it.qty) || 1,
+                discountPercentage: Number(it.discountPercentage) || 0
+            };
+        });
+        const subtotal = items.reduce((s,it) => s + (it.unitPrice * it.qty), 0);
+        const total = items.reduce((s,it) => {
+            const p = Math.round(it.unitPrice * (100 - (Number(it.discountPercentage)||0)) / 100);
+            return s + (p * it.qty);
+        }, 0);
+        return { id, createdAt: Date.now(), status: 'pending', items, subtotal, total };
+    }
+
+    async function persistInvoice(inv){
+        // Try Firestore first
+        try{
+            const ok = await (window.waitForFirestore ? window.waitForFirestore(3000) : Promise.resolve(false));
+            if (ok && window.__FIRESTORE_DB__){
+                const db = window.__FIRESTORE_DB__;
+                if (!inv.id){
+                    const ref = await db.collection('invoices').add(inv);
+                    inv.id = ref.id;
+                    return inv;
+                } else {
+                    await db.collection('invoices').doc(inv.id).set(inv, { merge: true });
+                    return inv;
+                }
+            }
+        }catch(e){ console.warn('Firestore invoice persist failed', e); }
+
+        // API fallback
+        try{
+            const base = getApiBase();
+            if (base){
+                const url = base.replace(/\/$/, '') + '/api/invoices' + (inv.id ? ('/' + inv.id) : '');
+                const method = inv.id ? 'PUT' : 'POST';
+                const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(inv) });
+                if (r.ok){ const data = await r.json(); return data; }
+            }
+        }catch(e){ console.warn('API invoice persist failed', e); }
+
+        // localStorage fallback
+        try{
+            const raw = localStorage.getItem('dj_invoices') || '[]';
+            const arr = JSON.parse(raw || '[]');
+            if (!inv.id) inv.id = 'inv' + Date.now() + Math.floor(Math.random()*900 + 100);
+            const idx = arr.findIndex(x => x.id === inv.id);
+            if (idx === -1) arr.unshift(inv); else arr[idx] = Object.assign({}, arr[idx], inv);
+            localStorage.setItem('dj_invoices', JSON.stringify(arr));
+            return inv;
+        }catch(e){ console.warn('localStorage invoice persist failed', e); }
+
+        throw new Error('Could not persist invoice');
+    }
+
+    async function loadInvoices(){
+        // Firestore
+        try{
+            const ok = await (window.waitForFirestore ? window.waitForFirestore(3000) : Promise.resolve(false));
+            if (ok && window.__FIRESTORE_DB__){
+                const snapshot = await window.__FIRESTORE_DB__.collection('invoices').get();
+                return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            }
+        }catch(e){ console.warn('Firestore load invoices failed', e); }
+
+        // API
+        try{
+            const base = getApiBase();
+            if (base){
+                const url = base.replace(/\/$/, '') + '/api/invoices';
+                const r = await fetch(url);
+                if (r.ok) return await r.json();
+            }
+        }catch(e){ console.warn('API load invoices failed', e); }
+
+        // localStorage
+        try{ return JSON.parse(localStorage.getItem('dj_invoices') || '[]'); }catch(e){ return []; }
+    }
+
+    function computeTotalSales(invoices){
+        if (!Array.isArray(invoices)) return 0;
+        return invoices.filter(i => i.status === 'confirmed').reduce((s,i) => s + (Number(i.total) || Number(i.subtotal) || 0), 0);
+    }
+
+    function renderInvoicesManager(area){
+        if (!area) return;
+        area.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div style="font-weight:800">Facturas</div><div>Total ventas: <span id="invoices-total">${formatCOP(0)}</span></div></div><div id="invoices-list"></div><div id="invoice-detail" style="margin-top:12px"></div>`;
+        loadInvoices().then(invoices => {
+            const list = area.querySelector('#invoices-list');
+            renderInvoicesList(list, invoices || []);
+            const totalEl = area.querySelector('#invoices-total');
+            if (totalEl) totalEl.textContent = formatCOP(computeTotalSales(invoices || []));
+        });
+    }
+
+    function renderInvoicesList(container, invoices){
+        if (!container) return;
+        container.innerHTML = '';
+        (invoices || []).forEach(inv => {
+            const div = document.createElement('div');
+            div.className = 'admin-invoice-row';
+            div.style.padding = '8px';
+            div.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
+            div.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>${inv.id}</strong> <small style="color:var(--muted);margin-left:6px">${new Date(inv.createdAt || Date.now()).toLocaleString()}</small><div style="color:${inv.status==='confirmed'?'green':'#666'};font-weight:700;margin-top:6px">${inv.status}</div></div><div><button class="btn btn-view-invoice" data-id="${inv.id}">Ver / Editar</button></div></div>`;
+            container.appendChild(div);
+        });
+        // attach view handlers
+        Array.from(container.querySelectorAll('.btn-view-invoice')).forEach(b => b.addEventListener('click', async (e) => {
+            const id = b.dataset.id;
+            const detail = container.parentElement.querySelector('#invoice-detail');
+            if (!detail) return;
+            // find invoice
+            const invoices = await loadInvoices();
+            const inv = (invoices || []).find(x => x.id === id);
+            if (!inv) { detail.innerHTML = '<div>No encontrada</div>'; return; }
+            openInvoiceEditorInAdmin(detail, inv);
+        }));
+    }
+
+    function openInvoiceEditorInAdmin(area, inv){
+        if (!area) return;
+        area.innerHTML = '';
+        const wrap = document.createElement('div');
+        wrap.style.border = '1px solid rgba(0,0,0,0.04)';
+        wrap.style.padding = '12px';
+        wrap.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>Factura ${inv.id}</strong><div style="color:var(--muted);font-size:0.9rem">${new Date(inv.createdAt||Date.now()).toLocaleString()}</div></div><div><button class="btn btn-confirm-invoice">Confirmar</button> <button class="btn btn-save-invoice">Guardar</button></div></div><div id="invoice-items" style="margin-top:12px"></div><div id="invoice-totals" style="margin-top:12px;font-weight:800">Total: ${formatCOP(inv.total || inv.subtotal || 0)}</div>`;
+        area.appendChild(wrap);
+        const itemsContainer = wrap.querySelector('#invoice-items');
+        function renderItems(){
+            itemsContainer.innerHTML = '';
+            (inv.items || []).forEach((it, idx) => {
+                const row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.justifyContent = 'space-between';
+                row.style.alignItems = 'center';
+                row.style.padding = '8px 0';
+                row.innerHTML = `<div style="flex:1"><strong>${escapeHtml(it.name)}</strong><div style="color:var(--muted);font-size:0.9rem">${formatCOP(it.unitPrice)} cada uno</div></div><div style="width:160px;display:flex;gap:8px;align-items:center"><input data-idx="${idx}" class="input-qty" type="number" min="1" value="${it.qty}" style="width:70px;padding:6px" /><input data-idx="${idx}" class="input-discount" type="number" min="0" max="100" value="${it.discountPercentage||0}" style="width:70px;padding:6px" /><button data-idx="${idx}" class="btn btn-remove-invoice-item">Eliminar</button></div>`;
+                itemsContainer.appendChild(row);
+            });
+            // attach handlers
+            Array.from(itemsContainer.querySelectorAll('.input-qty')).forEach(i => i.addEventListener('change', (e)=>{
+                const idx = Number(i.dataset.idx); inv.items[idx].qty = Math.max(1, Number(i.value)||1); recalcTotals();
+            }));
+            Array.from(itemsContainer.querySelectorAll('.input-discount')).forEach(i => i.addEventListener('change', (e)=>{
+                const idx = Number(i.dataset.idx); inv.items[idx].discountPercentage = Math.max(0, Math.min(100, Number(i.value)||0)); recalcTotals();
+            }));
+            Array.from(itemsContainer.querySelectorAll('.btn-remove-invoice-item')).forEach(b => b.addEventListener('click', (e)=>{
+                const idx = Number(b.dataset.idx); inv.items.splice(idx,1); renderItems(); recalcTotals();
+            }));
+        }
+        function recalcTotals(){
+            inv.subtotal = (inv.items || []).reduce((s,it) => s + ((Number(it.unitPrice)||0) * (Number(it.qty)||1)), 0);
+            inv.total = (inv.items || []).reduce((s,it) => {
+                const p = Math.round((Number(it.unitPrice)||0) * (100 - (Number(it.discountPercentage)||0))/100);
+                return s + (p * (Number(it.qty)||1));
+            }, 0);
+            wrap.querySelector('#invoice-totals').textContent = 'Total: ' + formatCOP(inv.total || inv.subtotal || 0);
+        }
+        // Save handler
+        wrap.querySelector('.btn-save-invoice').addEventListener('click', async () => {
+            try{ await persistInvoice(inv); alert('Factura guardada.'); renderInvoicesManager(document.getElementById('admin-invoices-area')); }catch(e){ alert('Error guardando factura.'); console.warn(e); }
+        });
+        // Confirm handler
+        wrap.querySelector('.btn-confirm-invoice').addEventListener('click', async () => {
+            if (!confirm('Confirmar factura y descontar stock? esta acción actualizará inventario.')) return;
+            try{
+                await confirmInvoice(inv.id);
+                renderInvoicesManager(document.getElementById('admin-invoices-area'));
+            }catch(e){ console.warn('Confirm invoice failed', e); alert('No se pudo confirmar la factura: ' + (e && e.message ? e.message : String(e))); }
+        });
+
+        renderItems(); recalcTotals();
+    }
+
+    async function confirmInvoice(id){
+        const errors = [];
+        // Try API confirmation (server will handle stock update)
+        try{
+            const base = getApiBase();
+            if (base){
+                const url = base.replace(/\/$/, '') + '/api/invoices/' + id + '/confirm';
+                let r = null;
+                try{
+                    r = await fetch(url, { method: 'POST' });
+                }catch(fetchErr){
+                    errors.push('API fetch error: ' + (fetchErr && fetchErr.message ? fetchErr.message : String(fetchErr)));
+                    r = null;
+                }
+                if (r){
+                    if (r.ok){
+                        const data = await r.json();
+                        // refresh products from API if possible
+                        try{ const r2 = await fetch(base.replace(/\/$/, '') + '/api/products'); if (r2.ok){ DJ_PRODUCTS_DATA = await r2.json(); renderProducts(); renderAllProducts(); renderBestSellersWidget(); } }catch(e){}
+                        alert('Factura confirmada. Stocks actualizados.');
+                        return data;
+                    } else {
+                        let bodyText = '';
+                        try{ bodyText = await r.text(); }catch(e){ bodyText = String(e); }
+                        errors.push('API: ' + r.status + ' ' + r.statusText + ' - ' + bodyText);
+                    }
+                }
+            }
+        }catch(e){ errors.push('API unexpected error: ' + (e && e.message ? e.message : String(e))); }
+
+        // Fallback: localStorage adjustments
+        try{
+            const raw = localStorage.getItem('dj_invoices') || '[]';
+            const arr = JSON.parse(raw || '[]');
+            const idx = arr.findIndex(i => i.id === id);
+            if (idx !== -1){
+                const inv = arr[idx];
+                (inv.items || []).forEach(it => {
+                    const pidx = (DJ_PRODUCTS_DATA || []).findIndex(p => p.id === it.id || (p.title||p.name) === it.name);
+                    if (pidx !== -1){
+                        DJ_PRODUCTS_DATA[pidx].stock = Math.max(0, Number(DJ_PRODUCTS_DATA[pidx].stock || 0) - Number(it.qty || 0));
+                    }
+                });
+                inv.status = 'confirmed';
+                inv.confirmedAt = Date.now();
+                arr[idx] = inv;
+                localStorage.setItem('dj_invoices', JSON.stringify(arr));
+                // save updated products to localStorage for fallback visibility
+                try{ localStorage.setItem('dj_local_products', JSON.stringify(DJ_PRODUCTS_DATA)); }catch(e){}
+                alert('Factura confirmada (local). Stocks actualizados en localStorage.');
+                renderProducts();
+                return inv;
+            } else {
+                errors.push('localStorage: invoice not found');
+            }
+        }catch(e){ errors.push('localStorage error: ' + (e && e.message ? e.message : String(e))); }
+
+        throw new Error(errors.join(' | '));
+    }
+
     (async function initRepoProducts(){
         populateCategorySelects();
+
+        // Note: admin-only offers UI is available from the admin panel (admin.html)
+        // and not injected into the public 'ofertas.html' page.
 
         // 1) If Firestore configured, subscribe to real-time updates
         try{
@@ -632,6 +1154,52 @@ document.addEventListener('DOMContentLoaded', () => {
         tryRenderProductDetail();
         startLiveSalesSimulation();
     })();
+
+    // Admin: abrir el gestor de Ofertas desde el panel (botón en admin.html)
+    try{
+        const path = window.location.pathname.split('/').pop();
+        if (path === 'admin.html' || window.location.pathname.indexOf('/admin') !== -1){
+            const btn = document.getElementById('admin-offers-btn');
+            const area = document.getElementById('admin-offers-area');
+            if (btn && area){
+                btn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    // Ensure admin authentication (demo): if not authed, prompt now
+                    if (!sessionStorage.getItem('admin_authed')){
+                        const pass = prompt('Contraseña de administrador (demo):');
+                        if (pass !== 'admin123'){
+                            alert('Acceso denegado. Ingresa la contraseña en el panel.');
+                            return;
+                        }
+                        sessionStorage.setItem('admin_authed','1');
+                    }
+                    adminOffersActive = true;
+                    // create controls + grid for offers management
+                    area.innerHTML = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><input id="product-search-input" class="search-box" placeholder="Buscar productos..." style="flex:1" /><button id="categories-btn" class="btn-outline">Categorias</button><div id="active-filter-label" style="margin-left:8px;color:var(--muted)"></div></div><div class="grid-container"></div>`;
+                    attachSearchCategoriesHandlers && attachSearchCategoriesHandlers();
+                    createCategoryFilterUI();
+                    renderProducts();
+                    area.scrollIntoView({ behavior: 'smooth' });
+                });
+            }
+                // invoices manager
+                const invBtn = document.getElementById('admin-invoices-btn');
+                const invArea = document.getElementById('admin-invoices-area');
+                if (invBtn && invArea){
+                    invBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        if (!sessionStorage.getItem('admin_authed')){
+                            const pass = prompt('Contraseña de administrador (demo):');
+                            if (pass !== 'admin123'){ alert('Acceso denegado. Ingresa la contraseña en el panel.'); return; }
+                            sessionStorage.setItem('admin_authed','1');
+                        }
+                        adminOffersActive = false;
+                        renderInvoicesManager(invArea);
+                        invArea.scrollIntoView({ behavior: 'smooth' });
+                    });
+                }
+        }
+    }catch(e){ /* ignore admin UI attach errors */ }
 
     // 3. Funcionalidad de Botones "Añadir al Carrito" -> carrito funcional
     const cartButton = document.getElementById('cart-button');
@@ -754,20 +1322,33 @@ document.addEventListener('DOMContentLoaded', () => {
         cartPanel.setAttribute('aria-hidden', 'true');
     });
 
-    // Checkout: abrir WhatsApp con lista de productos y total
-    checkoutBtn && checkoutBtn.addEventListener('click', () => {
+    // Checkout: generar factura y abrir WhatsApp con lista de productos y total
+    checkoutBtn && checkoutBtn.addEventListener('click', async () => {
         if (cart.length === 0) {
             alert('Tu carrito está vacío.');
             return;
         }
-        const lines = cart.map(it => {
+        // create invoice and persist (Firestore -> API -> localStorage)
+        const invoice = createInvoiceFromCart();
+        let saved = null;
+        try{
+            saved = await persistInvoice(invoice);
+            try{ alert('Factura generada: ' + (saved.id || invoice.id)); }catch(e){}
+        }catch(e){ console.warn('No se pudo guardar la factura:', e); saved = invoice; }
+
+        // clear cart after generating invoice
+        cart = [];
+        saveCart();
+        updateCartDisplay();
+
+        const lines = (saved.items || []).map(it => {
             const qty = Number(it.qty) || 1;
-            const unit = formatCOP(it.price);
-            const subtotal = formatCOP((Number(it.price) || 0) * qty);
+            const unit = formatCOP(it.unitPrice || it.price || 0);
+            const subtotal = formatCOP((Number(it.unitPrice || it.price) || 0) * qty);
             return qty > 1 ? `- ${it.name} x${qty} (${unit}) — ${subtotal}` : `- ${it.name} (${unit})`;
         });
-        const total = formatCOP(cartTotal());
-        const plainMsg = `Hola quiero comprar:\n${lines.join('\n')}\nTotal: ${total}`;
+        const total = formatCOP(saved.total || saved.subtotal || 0 || cartTotal());
+        const plainMsg = `Hola quiero comprar (Factura: ${saved.id || invoice.id}):\n${lines.join('\n')}\nTotal: ${total}`;
         const wa = `https://wa.me/573227098891?text=${encodeURIComponent(plainMsg)}`;
         window.open(wa, '_blank');
     });
@@ -808,7 +1389,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     console.log("%c D&J Beauty Studio ", "background: #810319; color: #fff; padding: 5px; border-radius: 3px;");
     // Search input + compact categories button
-    (function(){
+    function attachSearchCategoriesHandlers(){
         const searchInput = document.getElementById('product-search-input');
         const categoriesBtn = document.getElementById('categories-btn');
 
@@ -818,6 +1399,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (searchInput){
+            // avoid duplicate handlers by cloning node
+            try{ searchInput.removeEventListener && searchInput.removeEventListener('input', null); }catch(e){}
             searchInput.addEventListener('input', debounce(function(){
                 currentSearch = (searchInput.value || '').trim();
                 updateActiveFilterLabel();
@@ -870,5 +1453,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 setTimeout(()=>document.addEventListener('click', onDocClick), 10);
             });
         }
-    })();
+    }
+
+    // Attach handlers to any present search/categories controls on load
+    attachSearchCategoriesHandlers();
 });
