@@ -22,6 +22,75 @@ async function apiFetch(endpoint, opts){
     return fetch(url, opts);
 }
 
+// Firestore helpers: dynamic SDK load, init and convenience writers
+window.__FIRESTORE_READY = false;
+window.__USE_FIRESTORE__ = false;
+window.__FIRESTORE_DB__ = null;
+function loadScript(url){
+    return new Promise((resolve,reject)=>{
+        const s = document.createElement('script');
+        s.src = url;
+        s.onload = () => resolve();
+        s.onerror = (e) => reject(e);
+        document.head.appendChild(s);
+    });
+}
+
+window.waitForFirestore = function(timeoutMs = 4000){
+    if (window.__FIRESTORE_INIT_PROMISE__) return window.__FIRESTORE_INIT_PROMISE__;
+    window.__FIRESTORE_INIT_PROMISE__ = (async ()=>{
+        // detect config from global var or meta tag
+        let cfg = window.__FIREBASE_CONFIG__ || null;
+        try{
+            const meta = document.querySelector && document.querySelector('meta[name="firebase-config"]');
+            if (!cfg && meta && meta.content){ try{ cfg = JSON.parse(meta.content); }catch(e){ console.warn('Invalid firebase-config meta'); cfg = null; } }
+        }catch(e){ cfg = cfg || null; }
+
+        if (!cfg) return false;
+        try{
+            await loadScript('https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js');
+            await loadScript('https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js');
+            if (!window.firebase) throw new Error('Firebase SDK not available');
+            window.firebase.initializeApp(cfg);
+            window.__FIRESTORE_DB__ = window.firebase.firestore();
+            window.__USE_FIRESTORE__ = true;
+            window.__FIRESTORE_READY = true;
+            return true;
+        }catch(err){ console.warn('Firebase init failed', err); return false; }
+    })();
+    return window.__FIRESTORE_INIT_PROMISE__;
+};
+
+// convenience write helpers (useful for admin pages)
+window.writeProductToFirestore = async function(product){
+    const ok = await window.waitForFirestore();
+    if (!ok) return null;
+    const db = window.__FIRESTORE_DB__;
+    const ref = await db.collection('products').add(product);
+    return { id: ref.id, ...product };
+};
+
+window.bulkUpdateFirestore = async function(updates){
+    const ok = await window.waitForFirestore();
+    if (!ok) return false;
+    const db = window.__FIRESTORE_DB__;
+    const batch = db.batch();
+    updates.forEach(u=>{
+        const docRef = db.collection('products').doc(u.id);
+        batch.update(docRef, { stock: u.stock });
+    });
+    await batch.commit();
+    return true;
+};
+
+window.deleteProductFirestore = async function(id){
+    const ok = await window.waitForFirestore();
+    if (!ok) return false;
+    const db = window.__FIRESTORE_DB__;
+    await db.collection('products').doc(id).delete();
+    return true;
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     let currentCategoryFilter = '';
     // in-memory products loaded from repository db.json
@@ -174,22 +243,37 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Inicializar productos y UI de filtros usando únicamente `db.json` del repositorio.
+    // Inicializar productos y UI de filtros: preferir Firestore, si no cae a db.json del repo
     (async function initRepoProducts(){
         populateCategorySelects();
-        // Try repo-configured URL (meta[name="repo-base"] or window.__REPO_BASE__), then /db.json
+
+        // 1) If Firestore configured, subscribe to real-time updates
+        try{
+            const ok = await (window.waitForFirestore ? window.waitForFirestore(4000) : Promise.resolve(false));
+            if (ok && window.__FIRESTORE_DB__){
+                const db = window.__FIRESTORE_DB__;
+                db.collection('products').onSnapshot(snapshot => {
+                    DJ_PRODUCTS_DATA = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    createCategoryFilterUI();
+                    renderProducts();
+                }, err => {
+                    console.warn('Firestore products snapshot error', err);
+                });
+                return;
+            }
+        }catch(e){ /* continue to repo fallback */ }
+
+        // 2) Fallback to repo db.json (meta repo-base or /db.json)
         const repoBaseMeta = document.querySelector('meta[name="repo-base"]')?.content || window.__REPO_BASE__ || '';
         const candidates = [];
         if (repoBaseMeta) candidates.push(repoBaseMeta.replace(/\/$/, '') + '/db.json');
         candidates.push('/db.json');
-        // Try candidates sequentially
         let loaded = false;
         for (const url of candidates){
             try{
                 const r = await fetch(url, { cache: 'no-cache' });
                 if (r && r.ok){
                     const data = await r.json();
-                    // support both { products: [...] } and plain array
                     DJ_PRODUCTS_DATA = Array.isArray(data) ? data : (data.products || []);
                     loaded = true;
                     break;
@@ -198,7 +282,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (!loaded){
-            // No repo DB found — show empty state but do not read localStorage
             DJ_PRODUCTS_DATA = [];
             console.warn('No repository db.json found; site will show no products.');
         }

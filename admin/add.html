@@ -99,6 +99,7 @@
         <p>&copy; 2026 D&J Beauty Studio. Panel demo.</p>
     </footer>
 
+    <script src="../firebase-config.js"></script>
     <script src="../script.js"></script>
     <script>
         function showToast(msg, timeout = 1400){
@@ -142,7 +143,15 @@
                 const product = { eyebrow, title, price, stock, image, description };
 
                 async function saveToApi(prod){
+                    // Try Firestore first (if configured), then server API, then fallback
                     try{
+                        if (window.writeProductToFirestore){
+                            try{
+                                const created = await window.writeProductToFirestore(prod);
+                                if (created) return created;
+                            }catch(e){ /* continue to next */ }
+                        }
+
                         if (typeof apiFetch === 'function'){
                             const res = await apiFetch('/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(prod) });
                             if (res && res.ok){ const created = await res.json(); return created; }

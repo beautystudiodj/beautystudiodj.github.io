@@ -53,6 +53,8 @@
         <p>&copy; 2026 D&J Beauty Studio. Panel demo.</p>
     </footer>
 
+    <script src="../firebase-config.js"></script>
+    <script src="../script.js"></script>
     <script>
         // API helpers (use meta[name="api-base"] or window.__API_BASE__ to point to a remote API)
         function getApiBase(){
@@ -152,6 +154,15 @@
         async function commitStockChanges(){
             if (!hasPendingChanges()) return showToast('No hay cambios pendientes');
             const updates = Object.keys(pendingStockChanges).map(id=> ({ id, stock: pendingStockChanges[id] }));
+
+            // Prefer Firestore when available
+            try{
+                if (window.bulkUpdateFirestore){
+                    const ok = await window.bulkUpdateFirestore(updates);
+                    if (ok){ pendingStockChanges = {}; showToast('Stock actualizado (Firestore)', 1400); renderProducts(); return; }
+                }
+            }catch(e){ /* continue to next */ }
+
             // If API available, push changes to server
             if (useApi){
                 try{
@@ -168,7 +179,7 @@
                 }catch(e){ /* continue to fallback */ }
             }
 
-            // Fallback: update localStorage
+            // Fallback: update local copy (not persisted to repo)
             const prods = loadProducts();
             Object.keys(pendingStockChanges).forEach(id=>{
                 const idx = prods.findIndex(p=>p.id===id);
@@ -183,6 +194,15 @@
 
         async function deleteProduct(id){
             if (!confirm('Eliminar este producto?')) return;
+
+            // Prefer Firestore
+            try{
+                if (window.deleteProductFirestore){
+                    const ok = await window.deleteProductFirestore(id);
+                    if (ok){ if (pendingStockChanges[id] !== undefined) delete pendingStockChanges[id]; showToast('Producto eliminado (Firestore)'); renderProducts(); return; }
+                }
+            }catch(e){ /* continue */ }
+
             // try server delete first
             if (useApi){
                 try{
@@ -206,11 +226,23 @@
         }
 
         document.addEventListener('DOMContentLoaded', async ()=>{
-            // Try API first, then fallback to the repository db.json file (repo-base or /db.json)
+            // Prefer Firestore (if configured), then API, then repo db.json
             try{
-                const res = await apiFetch('/products');
-                if (res && res.ok){ serverProducts = await res.json(); useApi = true; }
-            }catch(e){ useApi = false; serverProducts = null; }
+                const fbOk = await (window.waitForFirestore ? window.waitForFirestore(4000) : Promise.resolve(false));
+                if (fbOk && window.__FIRESTORE_DB__){
+                    try{
+                        const snap = await window.__FIRESTORE_DB__.collection('products').get();
+                        serverProducts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    }catch(e){ serverProducts = null; }
+                }
+            }catch(e){ /* ignore */ }
+
+            if (!serverProducts || !serverProducts.length){
+                try{
+                    const res = await apiFetch('/products');
+                    if (res && res.ok){ serverProducts = await res.json(); useApi = true; }
+                }catch(e){ useApi = false; serverProducts = null; }
+            }
 
             if (!serverProducts || !serverProducts.length){
                 // try repo db.json
