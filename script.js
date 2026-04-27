@@ -514,7 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         function scheduleNext(){
             // increase randomness and spacing so notifications feel less frequent
-            const delay = 30000 + Math.floor(Math.random()*90000); // 30s..120s
+            const delay = 10000 + Math.floor(Math.random()*20000); // 10s..30s
             window.__LIVE_SALES_TIMER__ = setTimeout(()=>{
                 try{ showSale(); }catch(e){}
                 scheduleNext();
