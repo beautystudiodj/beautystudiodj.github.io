@@ -27,6 +27,8 @@ async function apiFetch(endpoint, opts){
 
 document.addEventListener('DOMContentLoaded', () => {
     let currentCategoryFilter = '';
+    let currentSort = '';
+    let currentSearch = '';
     // in-memory products loaded from repository db.json
     let DJ_PRODUCTS_DATA = null;
     // 1. Marcar enlace activo en el menú
@@ -69,39 +71,136 @@ document.addEventListener('DOMContentLoaded', () => {
         if (document.getElementById('dj-cat-styles')) return;
         const s = document.createElement('style');
         s.id = 'dj-cat-styles';
-        s.innerHTML = `.category-filters{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.category-filters .chip{cursor:pointer;border:1px solid #ddd;padding:6px 10px;border-radius:999px;background:#fff}.category-filters .chip.active{background:#810319;color:#fff;border-color:#810319}`;
+        s.innerHTML = `
+            /* Lightweight category dropdown: subtle, compact appearance */
+            .category-filters{display:flex;flex-direction:column;gap:8px;margin:8px 0;padding:8px;border-radius:10px;border:1px solid rgba(0,0,0,0.06);background:rgba(255,255,255,0.98);box-shadow:0 6px 18px rgba(20,20,20,0.03);font-size:0.95rem;color:var(--ink)}
+            .category-filters .filter-controls{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+            .category-filters .groups{display:block;gap:6px;flex-wrap:nowrap;margin-top:6px}
+            .category-group{width:100%;border-radius:6px;padding:6px;background:transparent;border-bottom:1px solid rgba(0,0,0,0.04)}
+            .category-group .group-chips{display:block;padding:6px 0;margin:0}
+            .category-filters .chip{cursor:pointer;border:none;padding:8px 10px;border-radius:8px;background:transparent;color:var(--wine-700);font-weight:600;font-size:0.95rem;transition:background 0.12s ease;display:block;text-align:left;width:100%}
+            .category-filters .chip:hover{background:rgba(129,3,25,0.04)}
+            .category-filters .chip.active{background:var(--wine-700);color:var(--white);box-shadow:0 8px 22px rgba(129,3,25,0.08)}
+            .filter-controls select{padding:6px 8px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);background:transparent;font-size:0.92rem}
+            @media(min-width:900px){.category-filters{flex-direction:row;align-items:flex-start}.category-group{border-bottom:none;padding-right:12px}.category-group .group-chips{display:block}}
+            .category-filters.dropdown{position:absolute;display:none;width:300px;max-width:calc(100% - 32px);z-index:99999;padding:10px;border-radius:10px;background:rgba(255,255,255,0.98);border:1px solid rgba(0,0,0,0.06);box-shadow:0 10px 30px rgba(20,20,20,0.06);backdrop-filter:blur(2px);max-height:70vh;overflow:auto;opacity:0;transform:translateY(-6px);transition:opacity 140ms ease, transform 140ms ease}
+            .category-group > .chip[data-group]{font-weight:700;color:var(--muted);background:transparent;padding:6px 8px;border-radius:6px;margin-bottom:6px}
+        `;
         document.head.appendChild(s);
     }
 
+    function categorizeCategory(cat){
+        if (!cat) return 'Otros';
+        const key = cat.toString().toLowerCase();
+        const groupsKeywords = {
+            'Cuidado': ['cuidado','piel','crema','mascarilla','serum','tonic','tónico','exfoli','tratamiento'],
+            'Maquillaje': ['labio','labiales','sombra','delineador','polvo','base','blush','iluminador','contorno','maquillaje','ojo','pestaña','brocha','brillo'],
+            'Cabello': ['shamp','acondicion','capilar'],
+            'Fragancias': ['fragancia'],
+            'Higiene': ['higiene'],
+            'Accesorios': ['accesorio','brocha','pincel','pestañas']
+        };
+        for (const groupName in groupsKeywords){
+            const kws = groupsKeywords[groupName];
+            for (const kw of kws) if (key.includes(kw)) return groupName;
+        }
+        return 'Otros';
+    }
+
     function createCategoryFilterUI(){
+        if (document.querySelector('.category-filters')) return;
         const grid = document.querySelector('.grid-container');
         if (!grid) return;
         injectCategoryStyles();
         const wrapper = document.createElement('div');
         wrapper.className = 'category-filters';
 
-        const allBtn = document.createElement('button'); allBtn.type = 'button'; allBtn.className = 'chip active'; allBtn.dataset.cat = ''; allBtn.textContent = 'Todos'; wrapper.appendChild(allBtn);
+        // Controls: Todos + Sort select
+        const controls = document.createElement('div');
+        controls.className = 'filter-controls';
+        const allBtn = document.createElement('button'); allBtn.type = 'button'; allBtn.className = 'chip active'; allBtn.dataset.cat = ''; allBtn.textContent = 'Todos'; controls.appendChild(allBtn);
+        const sortSelect = document.createElement('select'); sortSelect.id = 'filter-sort-select';
+        const opt0 = document.createElement('option'); opt0.value = ''; opt0.textContent = 'Orden: defecto'; sortSelect.appendChild(opt0);
+        const opt1 = document.createElement('option'); opt1.value = 'price-asc'; opt1.textContent = 'Precio: más bajo'; sortSelect.appendChild(opt1);
+        const opt2 = document.createElement('option'); opt2.value = 'price-desc'; opt2.textContent = 'Precio: más alto'; sortSelect.appendChild(opt2);
+        controls.appendChild(sortSelect);
+        wrapper.appendChild(controls);
+
+        // Groups container
+        const groupsContainer = document.createElement('div');
+        groupsContainer.className = 'groups';
+
+        // Build groups from DJ_CATEGORIES using keyword heuristics
+        const groups = {};
         DJ_CATEGORIES.forEach(cat => {
-            const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.dataset.cat = cat; b.textContent = cat; wrapper.appendChild(b);
+            const g = categorizeCategory(cat);
+            if (!groups[g]) groups[g] = [];
+            groups[g].push(cat);
         });
 
+        // Include any extra categories found in products
         const products = loadProducts() || [];
-        const others = [...new Set(products.map(p => (p.eyebrow||'').trim()).filter(c => c && !DJ_CATEGORIES.some(dc => dc.toLowerCase()===c.toLowerCase())) )];
-        if (others.length) {
-            const b = document.createElement('button'); b.type='button'; b.className='chip'; b.dataset.cat='__others'; b.textContent='Otros'; wrapper.appendChild(b);
-        }
+        const extraCats = [...new Set(products.map(p => (p.eyebrow||'').trim()).filter(c => c && !DJ_CATEGORIES.some(dc => dc.toLowerCase()===c.toLowerCase())))];
+        if (extraCats.length){ if (!groups['Otros']) groups['Otros'] = []; extraCats.forEach(ec => { if (!groups['Otros'].includes(ec)) groups['Otros'].push(ec); }); }
 
-        grid.parentNode.insertBefore(wrapper, grid);
-
-        wrapper.addEventListener('click', (e) => {
-            const btn = e.target.closest('button[data-cat]');
-            if (!btn) return;
-            setCategoryFilter(btn.dataset.cat);
+        Object.keys(groups).forEach(groupName => {
+            const groupEl = document.createElement('div'); groupEl.className = 'category-group';
+            const head = document.createElement('button'); head.type = 'button'; head.className = 'chip'; head.dataset.group = groupName; head.textContent = groupName; groupEl.appendChild(head);
+            const inner = document.createElement('div'); inner.className = 'group-chips';
+            groups[groupName].forEach(cat => {
+                const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.dataset.cat = cat; b.textContent = cat; inner.appendChild(b);
+            });
+            groupEl.appendChild(inner);
+            groupsContainer.appendChild(groupEl);
         });
+
+        wrapper.appendChild(groupsContainer);
+        // append to body so it can behave as a compact dropdown when needed
+        document.body.appendChild(wrapper);
+        wrapper.classList.add('dropdown');
+        wrapper.style.display = 'none';
+
+        // Events: toggle group, select category (hide dropdown after select)
+        wrapper.addEventListener('click', (e) => {
+            const groupBtn = e.target.closest('button[data-group]');
+            if (groupBtn){
+                const groupEl = groupBtn.closest('.category-group');
+                const inner = groupEl.querySelector('.group-chips');
+                inner.style.display = inner.style.display === 'block' ? 'none' : 'block';
+                return;
+            }
+            const chipBtn = e.target.closest('button[data-cat]');
+            if (chipBtn) {
+                setCategoryFilter(chipBtn.dataset.cat);
+                if (wrapper.classList.contains('dropdown')) wrapper.style.display = 'none';
+                return;
+            }
+        });
+
+        sortSelect.addEventListener('change', () => setSort(sortSelect.value));
+    }
+
+    function updateActiveFilterLabel(){
+        const label = document.getElementById('active-filter-label');
+        if (!label) return;
+        const parts = [];
+        if (currentCategoryFilter) parts.push('Categoría: ' + currentCategoryFilter);
+        if (currentSearch) parts.push('Buscar: ' + (currentSearch.length > 24 ? currentSearch.slice(0,24) + '...' : currentSearch));
+        if (currentSort === 'price-asc') parts.push('Orden: Precio ↑');
+        else if (currentSort === 'price-desc') parts.push('Orden: Precio ↓');
+        label.textContent = parts.join(' • ');
+    }
+
+    function setSort(sortKey){
+        currentSort = sortKey || '';
+        const sel = document.getElementById('filter-sort-select'); if (sel) sel.value = currentSort;
+        updateActiveFilterLabel();
+        renderProducts();
     }
 
     function setCategoryFilter(cat){
         currentCategoryFilter = cat || '';
+        updateActiveFilterLabel();
         const wrapper = document.querySelector('.category-filters');
         if (!wrapper) return;
         wrapper.querySelectorAll('.chip').forEach(b => b.classList.toggle('active', b.dataset.cat === (cat||'')));
@@ -147,6 +246,24 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 items = products.filter(p => (p.eyebrow||'').trim().toLowerCase() === currentCategoryFilter.toLowerCase());
             }
+        }
+
+        // Apply search query filter (title, category, description, price)
+        if (currentSearch && currentSearch.trim() !== ''){
+            const q = currentSearch.trim().toLowerCase();
+            items = items.filter(p => {
+                const hay = ((p.title||'') + ' ' + (p.eyebrow||'') + ' ' + (p.description||'')).toLowerCase();
+                if (hay.indexOf(q) !== -1) return true;
+                if (String(p.price||'').toLowerCase().indexOf(q) !== -1) return true;
+                return false;
+            });
+        }
+
+        // Apply sorting if requested
+        if (currentSort === 'price-asc'){
+            items = items.slice().sort((a,b)=> (Number(a.price)||0) - (Number(b.price)||0));
+        } else if (currentSort === 'price-desc'){
+            items = items.slice().sort((a,b)=> (Number(b.price)||0) - (Number(a.price)||0));
         }
         grid.innerHTML = '';
         items.forEach(prod => {
@@ -356,4 +473,68 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     console.log("%c D&J Beauty Studio ", "background: #810319; color: #fff; padding: 5px; border-radius: 3px;");
+    // Search input + compact categories button
+    (function(){
+        const searchInput = document.getElementById('product-search-input');
+        const categoriesBtn = document.getElementById('categories-btn');
+
+        function debounce(fn, wait = 250){
+            let t;
+            return function(...args){ clearTimeout(t); t = setTimeout(()=>fn.apply(this,args), wait); };
+        }
+
+        if (searchInput){
+            searchInput.addEventListener('input', debounce(function(){
+                currentSearch = (searchInput.value || '').trim();
+                updateActiveFilterLabel();
+                renderProducts();
+            }, 250));
+        }
+
+        if (categoriesBtn){
+            categoriesBtn.addEventListener('click', (e)=>{
+                e.preventDefault();
+                let wrapper = document.querySelector('.category-filters.dropdown');
+                if (!wrapper){
+                    createCategoryFilterUI();
+                    wrapper = document.querySelector('.category-filters.dropdown');
+                }
+                if (!wrapper) return;
+                if (wrapper.style.display === 'block'){
+                    wrapper.style.opacity = '0';
+                    wrapper.style.display = 'none';
+                    wrapper.setAttribute('aria-hidden','true');
+                    return;
+                }
+                const rect = categoriesBtn.getBoundingClientRect();
+                // show briefly to measure width, keep hidden to avoid flash
+                wrapper.style.display = 'block';
+                wrapper.style.visibility = 'hidden';
+                wrapper.style.opacity = '0';
+                wrapper.style.transform = 'translateY(-6px)';
+                wrapper.style.left = '0px';
+                wrapper.style.top = '0px';
+                const w = wrapper.offsetWidth || 300;
+                const maxLeft = Math.max(8, window.innerWidth - w - 8);
+                const calcLeft = Math.min(maxLeft, Math.max(8, Math.round(rect.left + (rect.width / 2) - (w / 2) + window.scrollX)));
+                const calcTop = rect.bottom + window.scrollY + 8;
+                wrapper.style.left = calcLeft + 'px';
+                wrapper.style.top = calcTop + 'px';
+                wrapper.style.visibility = '';
+                // animate visible
+                requestAnimationFrame(()=>{ wrapper.style.opacity = '1'; wrapper.style.transform = 'translateY(0)'; });
+                wrapper.setAttribute('aria-hidden','false');
+                // close on outside click
+                const onDocClick = (ev) => {
+                    if (!wrapper.contains(ev.target) && ev.target !== categoriesBtn){
+                        wrapper.style.opacity = '0';
+                        wrapper.style.display = 'none';
+                        wrapper.setAttribute('aria-hidden','true');
+                        document.removeEventListener('click', onDocClick);
+                    }
+                };
+                setTimeout(()=>document.addEventListener('click', onDocClick), 10);
+            });
+        }
+    })();
 });

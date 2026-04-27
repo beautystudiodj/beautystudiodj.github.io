@@ -107,7 +107,7 @@ nav {
 }
 
 nav a {
-    color: #810319 !important;
+    color: var(--wine-700);
     text-decoration: none;
     font-weight: 700;
     font-size: 0.82rem;
@@ -272,6 +272,29 @@ h2 {
 
 .btn-outline:hover {
     background: rgba(129, 3, 25, 0.06);
+}
+
+/* Compact search box for productos.html */
+.search-wrapper{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    background: var(--white);
+    border: 1px solid var(--line);
+    padding: 8px 12px;
+    border-radius: 999px;
+    width: min(520px, 60%);
+    box-shadow: 0 8px 22px rgba(129,3,25,0.04);
+}
+.search-icon{ color: var(--wine-700); opacity: 0.95; flex:0 0 auto; }
+.search-box{ border: none; outline: none; font-size: 0.95rem; padding: 6px 4px; width:100%; background: transparent; color: var(--ink); }
+.search-box::placeholder{ color: rgba(47,32,38,0.45); }
+.btn.small{ padding: 8px 12px; font-size: 0.92rem; border-radius: 12px; }
+
+@media (max-width: 720px){
+    .search-wrapper{ width: 100%; }
+    .search-box{ font-size: 0.95rem; }
+    .btn.small{ padding: 7px 10px; }
 }
 
 /* Keep white outline buttons when inside the dark hero */
