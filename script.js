@@ -232,6 +232,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return (text || '').replace(/[&"'<>]/g, function (a) { return {'&':'&amp;','"':'&quot;',"'":'&#39;','<':'&lt;','>':'&gt;'}[a]; });
     }
 
+    function getQueryParam(name){
+        try{ return new URLSearchParams(window.location.search).get(name); }catch(e){ return null; }
+    }
+
     function renderProducts() {
         const grid = document.querySelector('.grid-container');
         if (!grid) return;
@@ -266,15 +270,16 @@ document.addEventListener('DOMContentLoaded', () => {
             items = items.slice().sort((a,b)=> (Number(b.price)||0) - (Number(a.price)||0));
         }
         grid.innerHTML = '';
-        items.forEach(prod => {
+        items.forEach((prod, idx) => {
             const div = document.createElement('div');
             div.className = 'card';
             div.dataset.price = prod.price || '0';
+            const link = prod.id ? `product.html?id=${encodeURIComponent(prod.id)}` : `product.html?idx=${idx}`;
             div.innerHTML = `
-                <img src="${escapeHtml(prod.image || 'https://placehold.co/500x360/ddd/000?text=Sin+imagen')}" class="card-img-top" alt="${escapeHtml(prod.title)}">
+                <a href="${link}" class="card-link"><img src="${escapeHtml(prod.image || 'https://placehold.co/500x360/ddd/000?text=Sin+imagen')}" class="card-img-top" alt="${escapeHtml(prod.title)}"></a>
                 <div class="card-body">
                     <span class="eyebrow">${escapeHtml(prod.eyebrow || '')}</span>
-                    <h3>${escapeHtml(prod.title)}</h3>
+                    <h3><a href="${link}">${escapeHtml(prod.title)}</a></h3>
                     <p class="price">${formatCOP(prod.price || 0)}</p>
                     <p class="stock">Disponibles: ${prod.stock || 0} unidades</p>
                     <button class="btn btn-buy">Añadir al Carrito</button>
@@ -299,16 +304,31 @@ document.addEventListener('DOMContentLoaded', () => {
         container.innerHTML = '';
         items.forEach(prod => {
             const div = document.createElement('div');
-            div.className = 'card';
+            div.className = 'card best-card';
+            const link = prod.id ? `product.html?id=${encodeURIComponent(prod.id)}` : `product.html?title=${encodeURIComponent(prod.title||'')}`;
             div.innerHTML = `
-                <img src="${escapeHtml(prod.image || 'https://placehold.co/500x360/ddd/000?text=Sin+imagen')}" class="card-img-top" alt="${escapeHtml(prod.title)}">
+                <div class="best-badge" aria-hidden="true">TOP</div>
+                <a href="${link}" class="card-link"><img src="${escapeHtml(prod.image || 'https://placehold.co/500x360/ddd/000?text=Sin+imagen')}" class="card-img-top" alt="${escapeHtml(prod.title)}"></a>
                 <div class="card-body">
                     <span class="eyebrow">${escapeHtml(prod.eyebrow || '')}</span>
-                    <h3>${escapeHtml(prod.title || '')}</h3>
+                    <h3><a href="${link}">${escapeHtml(prod.title || '')}</a></h3>
                     <p class="price">${formatCOP(prod.price || 0)}</p>
-                    <a href="productos.html" class="btn">Ver producto</a>
+                    <div class="best-cta-row">
+                        <button type="button" class="btn buy-now" data-title="${escapeHtml(prod.title || '')}" data-price="${Number(prod.price || 0)}" aria-label="Comprar ${escapeHtml(prod.title || '')}">Comprar ahora</button>
+                    </div>
                 </div>`;
+            // Attach click handler to add to cart
             container.appendChild(div);
+            const buyBtn = div.querySelector('.buy-now');
+            if (buyBtn){
+                buyBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const title = buyBtn.dataset.title || prod.title || '';
+                    const price = Number(buyBtn.dataset.price || prod.price || 0) || 0;
+                    try{ addItemToCart({ name: title, price }); } catch(err){ console.warn('No se pudo añadir al carrito', err); }
+                });
+            }
+            
         });
     }
 
@@ -348,6 +368,214 @@ document.addEventListener('DOMContentLoaded', () => {
         renderBestSellersItems(items, container);
     }
 
+    // --- Recent products and full catalog rendering ---
+    function getProductTimestamp(p){
+        if (!p) return 0;
+        // Firestore timestamp
+        if (p.createdAt){
+            const v = p.createdAt;
+            if (typeof v === 'number') return v;
+            if (typeof v === 'string'){
+                const n = Date.parse(v);
+                if (!isNaN(n)) return n;
+                const asNum = parseInt(v,10); if (!isNaN(asNum)) return asNum;
+            }
+            if (v.seconds) return Number(v.seconds) * 1000;
+            if (typeof v.toDate === 'function'){
+                try { return v.toDate().getTime(); } catch(e){}
+            }
+        }
+        if (p.timestamp){
+            const t = p.timestamp;
+            if (typeof t === 'number') return t;
+            if (typeof t === 'string'){
+                const n = Date.parse(t); if (!isNaN(n)) return n; const asNum = parseInt(t,10); if (!isNaN(asNum)) return asNum;
+            }
+        }
+        return 0;
+    }
+
+    function renderCardList(items, container){
+        container.innerHTML = '';
+        if (!items || items.length === 0){
+            container.innerHTML = '<p style="color:var(--muted)">No hay productos disponibles.</p>';
+            return;
+        }
+        items.forEach((prod, idx) => {
+            const div = document.createElement('div');
+            div.className = 'card';
+            div.dataset.price = prod.price || '0';
+            const link = prod.id ? `product.html?id=${encodeURIComponent(prod.id)}` : `product.html?idx=${idx}`;
+            div.innerHTML = `
+                <a href="${link}" class="card-link"><img src="${escapeHtml(prod.image || 'https://placehold.co/500x360/ddd/000?text=Sin+imagen')}" class="card-img-top" alt="${escapeHtml(prod.title)}"></a>
+                <div class="card-body">
+                    <span class="eyebrow">${escapeHtml(prod.eyebrow || '')}</span>
+                    <h3><a href="${link}">${escapeHtml(prod.title || '')}</a></h3>
+                    <p class="price">${formatCOP(prod.price || 0)}</p>
+                    <a href="${link}" class="btn">Ver producto</a>
+                </div>`;
+            container.appendChild(div);
+        });
+    }
+
+    function renderRecentProducts(count = 6){
+        const container = document.getElementById('recent-products-grid');
+        if (!container) return;
+        const products = loadProducts() || [];
+        if (!products || products.length === 0){
+            container.innerHTML = '<p style="color:var(--muted)">No hay productos aún.</p>';
+            return;
+        }
+        const withTs = products.map(p => ({...p, __ts: getProductTimestamp(p)}));
+        const allZero = withTs.every(p => !p.__ts);
+        let items;
+        if (!allZero){
+            items = withTs.slice().sort((a,b) => (b.__ts || 0) - (a.__ts || 0)).slice(0, Math.min(count, withTs.length));
+        } else {
+            // fallback: take last 'count' items (assume array append = newest)
+            items = products.slice(-count).reverse();
+        }
+        renderCardList(items, container);
+    }
+
+    function renderAllProducts(){
+        const container = document.getElementById('all-products-grid');
+        if (!container) return;
+        const products = loadProducts() || [];
+        renderCardList(products, container);
+    }
+
+    // Try to render a product detail page if present
+    function tryRenderProductDetail(){
+        const container = document.getElementById('product-detail');
+        if (!container) return; // not a detail page
+        const id = getQueryParam('id');
+        const idx = getQueryParam('idx');
+        renderProductDetail(id, idx);
+    }
+    // Live sales simulation: shows occasional simulated "someone bought" notifications (with product preview)
+    function startLiveSalesSimulation(){
+        if (window.__LIVE_SALES_STARTED__) return;
+        window.__LIVE_SALES_STARTED__ = true;
+        const FIRST = ['María','Ana','Carolina','Luisa','Sofía','Valentina','Camila','Laura','Isabella','Natalia','Daniela','Paola','Juliana','Gabriela','Alejandra','Andrés','Juan','Carlos','Luis','Diego','Mateo','Santiago','Sebastián','David','Miguel','Javier'];
+        const LAST = ['García','Rodríguez','Pérez','Gómez','Sánchez','Martínez','Lozano','Hernández','Ramírez','Torres','Castillo','Ruiz','Fernández','Rojas','Vargas','Castro','Jiménez','Moreno','Ortiz','Silva'];
+
+        function rand(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+        function sampleProducts(){
+            const prods = loadProducts() || [];
+            let pool = [];
+            if (prods.length){
+                pool = prods.map(p => ({ id: p.id || null, title: p.title || p.name || 'Producto', image: p.image || '', price: p.price || 0 }));
+            } else {
+                pool = [
+                    { id: null, title: 'Labial Lip Crush Velvet', image: 'https://placehold.co/80x80/810319/ffffff?text=Lip', price: 18900 },
+                    { id: null, title: 'Serum Glass Skin 24h', image: 'https://placehold.co/80x80/4f0012/ffffff?text=Serum', price: 27500 },
+                    { id: null, title: 'Paleta Nude Attraction', image: 'https://placehold.co/80x80/a00927/ffffff?text=Paleta', price: 33000 },
+                    { id: null, title: 'Kit Glow Express', image: 'https://placehold.co/80x80/aa3377/ffffff?text=Kit', price: 42000 },
+                    { id: null, title: 'Brillo Labial Shine', image: 'https://placehold.co/80x80/ff6b6b/ffffff?text=Brillo', price: 12900 }
+                ];
+            }
+            const count = Math.random() < 0.35 ? (Math.random() < 0.4 ? 2 : 3) : 1; // mostly 1, sometimes 2-3
+            const picked = [];
+            const copy = pool.slice();
+            for (let i=0;i<count && copy.length;i++){
+                const idx = Math.floor(Math.random()*copy.length);
+                picked.push(copy.splice(idx,1)[0]);
+            }
+            return picked;
+        }
+
+        function showSale(){
+            const first = rand(FIRST);
+            const last = rand(LAST);
+            const name = `${first} ${last}`;
+            const items = sampleProducts();
+            const productLinksHtml = items.map(it => {
+                const href = it.id ? 'product.html?id=' + encodeURIComponent(it.id) : 'product.html';
+                return `<a href="${href}" class="live-sale-link" style="color:var(--wine-700);font-weight:700;text-decoration:none">${escapeHtml(it.title)}</a>`;
+            });
+            const textHtml = items.length === 1 ? productLinksHtml[0] : (productLinksHtml.slice(0,2).join(', ') + (items.length>2 ? ' y más' : ''));
+
+            const el = document.createElement('div');
+            el.className = 'live-sale';
+            const initials = (first[0]||'').toUpperCase() + (last[0]||'').toUpperCase();
+            el.innerHTML = `
+                <div class="live-sale-avatar">${escapeHtml(initials)}</div>
+                <div class="live-sale-body"><strong>${escapeHtml(name)}</strong><div class="live-sale-text">acaba de comprar ${textHtml}</div></div>
+                <div class="live-sale-preview">${items.map(it=>`<a href="${it.id ? 'product.html?id=' + encodeURIComponent(it.id) : 'product.html'}"><img src="${escapeHtml(it.image || 'https://placehold.co/64x64/ddd/000?text=img')}" alt="${escapeHtml(it.title)}"></a>`).join('')}</div>
+            `;
+            document.body.appendChild(el);
+            // animate in
+            requestAnimationFrame(()=> el.classList.add('show'));
+            // remove after timeout
+            setTimeout(()=>{ el.classList.remove('show'); setTimeout(()=>{ try{ el.remove(); }catch(e){} }, 260); }, 4200 + Math.floor(Math.random()*1400));
+        }
+
+        function scheduleNext(){
+            // increase randomness and spacing so notifications feel less frequent
+            const delay = 30000 + Math.floor(Math.random()*90000); // 30s..120s
+            window.__LIVE_SALES_TIMER__ = setTimeout(()=>{
+                try{ showSale(); }catch(e){}
+                scheduleNext();
+            }, delay);
+        }
+
+        scheduleNext();
+    }
+
+    function renderProductDetail(id, idxParam){
+        const container = document.getElementById('product-detail');
+        if (!container) return;
+        const products = loadProducts() || [];
+        let prod = null;
+        if (id){ prod = products.find(p => String(p.id) === String(id)); }
+        if (!prod && idxParam != null){ const i = parseInt(idxParam, 10); if (!isNaN(i) && products[i]) prod = products[i]; }
+        if (!prod){
+            // fallback: try matching by title
+            const titleKey = id ? String(id).toLowerCase() : null;
+            if (titleKey){ prod = products.find(p => String(p.title || '').toLowerCase().replace(/\s+/g,'-') === titleKey); }
+        }
+        if (!prod){ container.innerHTML = '<p style="color:var(--muted)">Producto no encontrado.</p>'; return; }
+
+        const html = `
+            <div class="product-detail">
+                <div class="product-gallery">
+                    <img src="${escapeHtml(prod.image || 'https://placehold.co/800x600/ddd/000?text=Sin+imagen')}" alt="${escapeHtml(prod.title)}" class="product-main-img">
+                </div>
+                <div class="product-info">
+                    <span class="eyebrow">${escapeHtml(prod.eyebrow || '')}</span>
+                    <h1>${escapeHtml(prod.title || '')}</h1>
+                    <p class="price">${formatCOP(prod.price || 0)}</p>
+                    <p class="description" style="color:var(--muted);line-height:1.6">${escapeHtml(prod.description || '')}</p>
+                    <div class="qty-row">
+                        <button id="qty-minus" class="qty-btn" aria-label="Disminuir cantidad">−</button>
+                        <input id="qty-input" type="number" value="1" min="1" aria-label="Cantidad" />
+                        <button id="qty-plus" class="qty-btn" aria-label="Aumentar cantidad">+</button>
+                        <div style="margin-left:12px;color:var(--muted)">Disponibles: <strong id="prod-stock">${prod.stock || 0}</strong></div>
+                    </div>
+                    <div class="product-actions">
+                        <button id="add-to-cart-btn" class="btn">Añadir al carrito</button>
+                        <a href="productos.html" class="btn-outline">Seguir comprando</a>
+                    </div>
+                </div>
+            </div>`;
+        container.innerHTML = html;
+
+        const qtyInput = document.getElementById('qty-input');
+        const minus = document.getElementById('qty-minus');
+        const plus = document.getElementById('qty-plus');
+        const addBtn = document.getElementById('add-to-cart-btn');
+        minus && minus.addEventListener('click', (e) => { e.preventDefault(); qtyInput.value = Math.max(1, Number(qtyInput.value) - 1); });
+        plus && plus.addEventListener('click', (e) => { e.preventDefault(); qtyInput.value = Math.max(1, Number(qtyInput.value) + 1); });
+        qtyInput && qtyInput.addEventListener('change', () => { if (Number(qtyInput.value) < 1) qtyInput.value = 1; });
+        addBtn && addBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const qty = Math.max(1, Number(qtyInput.value) || 1);
+            addItemToCart({ name: prod.title || '', price: Number(prod.price || 0), qty });
+        });
+    }
+
     // Inicializar productos y UI de filtros: preferir Firestore, si no cae a db.json del repo
     (async function initRepoProducts(){
         populateCategorySelects();
@@ -362,6 +590,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     createCategoryFilterUI();
                     renderProducts();
                     renderBestSellersWidget();
+                    renderRecentProducts();
+                    renderAllProducts();
+                    tryRenderProductDetail();
+                    startLiveSalesSimulation();
                 }, err => {
                     console.warn('Firestore products snapshot error', err);
                 });
@@ -395,6 +627,10 @@ document.addEventListener('DOMContentLoaded', () => {
         createCategoryFilterUI();
         renderProducts();
         renderBestSellersWidget();
+        renderRecentProducts();
+        renderAllProducts();
+        tryRenderProductDetail();
+        startLiveSalesSimulation();
     })();
 
     // 3. Funcionalidad de Botones "Añadir al Carrito" -> carrito funcional
@@ -423,9 +659,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function addItemToCart(item) {
+        // normalize
+        try{ item.qty = Math.max(1, Number(item.qty) || 1); }catch(e){ item.qty = 1; }
+        item.price = Number(item.price) || 0;
         cart.push(item);
         saveCart();
         updateCartDisplay();
+        // Visual feedback: pop the cart button and show a toast
+        popCartButton();
+        showAddToCartToast(item.name || 'Producto', item.qty || 1);
+        // open cart panel with smooth animation
         showCartTemporarily();
     }
 
@@ -436,19 +679,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function cartTotal() {
-        return cart.reduce((s, it) => s + (it.price || 0), 0);
+        return cart.reduce((s, it) => s + ((Number(it.price) || 0) * (Number(it.qty) || 1)), 0);
     }
 
     function updateCartDisplay() {
-        cartCountEl.innerText = cart.length;
+        const totalUnits = cart.reduce((s, it) => s + (Number(it.qty) || 1), 0);
+        cartCountEl.innerText = totalUnits;
         cartItemsContainer.innerHTML = '';
         if (cart.length === 0) {
             cartItemsContainer.innerHTML = '<p style="color:#666">Tu carrito está vacío.</p>';
         } else {
             cart.forEach((it, idx) => {
+                const qty = Number(it.qty) || 1;
+                const subtotal = (Number(it.price) || 0) * qty;
                 const div = document.createElement('div');
                 div.className = 'cart-item';
-                div.innerHTML = `<div><strong>${escapeHtml(it.name)}</strong><div style="font-size:0.9rem;color:#666">${formatCOP(it.price)}</div></div><div><button data-idx="${idx}" class="btn-remove">Eliminar</button></div>`;
+                div.innerHTML = `<div><strong>${escapeHtml(it.name)}</strong><div style="font-size:0.9rem;color:#666">${formatCOP(it.price)}${qty>1? ' ×'+qty + ' = ' + formatCOP(subtotal) : ''}</div></div><div><button data-idx="${idx}" class="btn-remove">Eliminar</button></div>`;
                 cartItemsContainer.appendChild(div);
             });
         }
@@ -463,11 +709,38 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showCartTemporarily() {
+        if (!cartPanel) return;
         cartPanel.classList.add('show');
         cartPanel.setAttribute('aria-hidden', 'false');
-        setTimeout(() => {
-            // leave open for manual close; do not auto-hide
-        }, 1200);
+        // ensure keyboard focus lands on close button for accessibility
+        try { if (cartClose) cartClose.focus(); } catch(e){}
+    }
+
+    // Small animation on the floating cart button to draw attention
+    function popCartButton(){
+        try{
+            if (!cartButton) return;
+            cartButton.classList.add('pop');
+            setTimeout(()=>{ cartButton.classList.remove('pop'); }, 360);
+        }catch(e){ /* ignore */ }
+    }
+
+    // Toast feedback when adding an item to the cart
+    function showAddToCartToast(name, qty){
+        try{
+            const t = document.createElement('div');
+            t.className = 'cart-toast';
+            const qtyText = (qty && Number(qty) > 1) ? ` <span style="opacity:0.9">(x${Number(qty)})</span>` : '';
+            t.innerHTML = `<div class="toast-inner">✔ Añadido: <strong>${escapeHtml(name)}</strong>${qtyText}</div>`;
+            document.body.appendChild(t);
+            // animate in
+            requestAnimationFrame(()=> t.classList.add('show'));
+            // remove after delay
+            setTimeout(()=>{
+                t.classList.remove('show');
+                setTimeout(()=>{ try{ t.remove(); }catch(e){} }, 260);
+            }, 1700);
+        }catch(e){ console.warn('Toast error', e); }
     }
 
     cartButton && cartButton.addEventListener('click', (e) => {
@@ -487,7 +760,12 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Tu carrito está vacío.');
             return;
         }
-        const lines = cart.map(it => `- ${it.name} (${formatCOP(it.price)})`);
+        const lines = cart.map(it => {
+            const qty = Number(it.qty) || 1;
+            const unit = formatCOP(it.price);
+            const subtotal = formatCOP((Number(it.price) || 0) * qty);
+            return qty > 1 ? `- ${it.name} x${qty} (${unit}) — ${subtotal}` : `- ${it.name} (${unit})`;
+        });
         const total = formatCOP(cartTotal());
         const plainMsg = `Hola quiero comprar:\n${lines.join('\n')}\nTotal: ${total}`;
         const wa = `https://wa.me/573227098891?text=${encodeURIComponent(plainMsg)}`;

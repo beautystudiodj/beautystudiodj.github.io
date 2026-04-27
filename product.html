@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Producto - D&J Beauty Studio</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="https://i.imgur.com/vscZKK3.png" type="image/png">
+</head>
+<body>
+
+    <div class="promo-bar">Nuevos tonos cada semana | Compra 2 y lleva 1 ítem gratis</div>
+
+    <header>
+        <div class="logo-container">
+            <img src="https://i.imgur.com/vscZKK3.png" alt="Logo D&J Beauty Studio">
+            <div class="brand-copy">
+                <h3>D&J Beauty Studio</h3>
+                <p>Colecciones irresistibles para una belleza que se nota.</p>
+            </div>
+        </div>
+    </header>
+
+    <nav>
+        <a href="index.html">Inicio</a>
+        <a href="productos.html">Productos</a>
+        <a href="ofertas.html">Ofertas</a>
+        <a href="envios.html">Envíos Nacionales</a>
+        <a href="staff.html">Staff</a>
+        <a href="admin/index.html">Panel</a>
+    </nav>
+
+    <div class="container">
+        <section class="fade-up delay-1">
+            <div id="product-detail"></div>
+        </section>
+    </div>
+
+    <footer>
+        <p>&copy; 2026 D&J Beauty Studio.</p>
+    </footer>
+
+    <a class="floating-whatsapp" href="https://wa.me/573227098891?text=Hola%20quiero%20ayuda%20para%20elegir%20productos" target="_blank" rel="noopener noreferrer">Asesora de Compra</a>
+
+    <div class="floating-social" aria-hidden="false">
+        <a class="social-link tiktok" href="https://www.tiktok.com/@19beautystudiodj" target="_blank" rel="noopener noreferrer" aria-label="TikTok 19beautystudiodj">
+          <img src="https://i.imgur.com/4QYSxp8.png" alt="TikTok 19beautystudiodj">
+        </a>
+        <a class="social-link instagram" href="https://www.instagram.com/19beautystudio_dj/" target="_blank" rel="noopener noreferrer" aria-label="Instagram 19beautudio_dj">
+          <img src="https://i.imgur.com/ihD6vQe.png" alt="Instagram 19beautostudiodj">
+        </a>
+    </div>
+
+    <a id="cart-button" class="floating-cart" href="#" aria-label="Ver carrito">🛒 <span id="cart-count">0</span></a>
+
+    <div id="cart-panel" class="cart-panel" aria-hidden="true">
+        <div class="cart-header">
+            <h4>Tu Carrito</h4>
+            <button id="cart-close" aria-label="Cerrar carrito">✕</button>
+        </div>
+        <div id="cart-items" class="cart-items"></div>
+        <div class="cart-footer">
+            <div class="cart-total">Total: <strong id="cart-total">COP $0</strong></div>
+            <div class="cart-actions">
+                <button id="checkout" class="btn">Pagar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="firebase-config.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

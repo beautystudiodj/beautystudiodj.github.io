@@ -44,6 +44,18 @@
             <p class="section-copy">Selección destacada — muestra fija por varios días.</p>
             <div id="best-sellers-grid" class="grid-container"></div>
         </section>
+
+        <section id="recent-products" class="recent-products fade-up delay-2" aria-label="Productos recientes">
+            <h2>Productos recién agregados</h2>
+            <p class="section-copy">Nuevas incorporaciones al catálogo.</p>
+            <div id="recent-products-grid" class="grid-container"></div>
+        </section>
+
+        <section id="all-products" class="all-products fade-up delay-2" aria-label="Todos los productos">
+            <h2>Todos los productos</h2>
+            <p class="section-copy">Explora nuestro catálogo completo.</p>
+            <div id="all-products-grid" class="grid-container"></div>
+        </section>
         <!-- Removed 'Por Que Nos Eligen' and 'Top Deseados' sections per request -->
 
         <section class="fade-up delay-2">
@@ -87,6 +99,22 @@
         <a class="social-link instagram" href="https://www.instagram.com/19beautystudio_dj/" target="_blank" rel="noopener noreferrer" aria-label="Instagram 19beautystudio_dj">
           <img src="https://i.imgur.com/ihD6vQe.png" alt="Instagram 19beautystudiodj">
         </a>
+    </div>
+
+    <a id="cart-button" class="floating-cart" href="#" aria-label="Ver carrito">🛒 <span id="cart-count">0</span></a>
+
+    <div id="cart-panel" class="cart-panel" aria-hidden="true">
+        <div class="cart-header">
+            <h4>Tu Carrito</h4>
+            <button id="cart-close" aria-label="Cerrar carrito">✕</button>
+        </div>
+        <div id="cart-items" class="cart-items"></div>
+        <div class="cart-footer">
+            <div class="cart-total">Total: <strong id="cart-total">COP $0</strong></div>
+            <div class="cart-actions">
+                <button id="checkout" class="btn">Pagar</button>
+            </div>
+        </div>
     </div>
 
     <script src="firebase-config.js"></script>
