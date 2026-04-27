@@ -258,7 +258,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderProducts() {
-        const grid = document.querySelector('.grid-container');
+        // Prefer rendering into the grid that sits inside the same section
+        // as the homepage search input (if present). Fall back to the
+        // first .grid-container on the page for legacy pages.
+        let grid = null;
+        const searchInput = document.getElementById('product-search-input');
+        if (searchInput){
+            const section = searchInput.closest('section') || searchInput.parentElement;
+            if (section) grid = section.querySelector('.grid-container');
+        }
+        if (!grid) grid = document.querySelector('.grid-container');
         if (!grid) return;
         const products = loadProducts() || [];
         let items = products;
@@ -392,10 +401,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         // after rendering best-sellers, adjust title alignment
         try{ adjustCardTitleAlignment && adjustCardTitleAlignment(container); }catch(e){}
+        // start auto-scroll for this horizontal strip (if available)
+        try{ if (typeof initHorizontalAutoScroll === 'function') initHorizontalAutoScroll(container); }catch(e){ console.warn('horizontal auto-scroll init failed', e); }
         // viewer counters only shown on product detail pages
     }
 
-    function renderBestSellersWidget(count = 3){
+    function renderBestSellersWidget(count = 8){
         const container = document.getElementById('best-sellers-grid');
         if (!container) return;
         const key = 'dj_best_sellers_v1';
@@ -429,6 +440,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try{ localStorage.setItem(key, JSON.stringify({ timestamp: Date.now(), items })); }catch(e){ /* ignore storage errors */ }
         renderBestSellersItems(items, container);
+    }
+
+    // Render a horizontal strip for recent products (similar look to best-sellers)
+    function renderRecentStrip(items, container){
+        if (!container) return;
+        container.innerHTML = '';
+        items.forEach(prod => {
+            const div = document.createElement('div');
+            div.className = 'card best-card';
+            const link = prod.id ? `product.html?id=${encodeURIComponent(prod.id)}` : `product.html?title=${encodeURIComponent(prod.title||'')}`;
+            const originalPrice = Number(prod.price || 0);
+            const discounted = getDiscountedPrice(prod);
+            const priceHtml = (prod.discountPercentage && Number(prod.discountPercentage) > 0) ? (`<div class="price-row"><span class="price-original">${formatCOP(originalPrice)}</span><span class="price price-discount">${formatCOP(discounted)}</span></div>`) : (`<p class="price">${formatCOP(originalPrice)}</p>`);
+            div.innerHTML = `
+                <a href="${link}" class="card-link"><img src="${escapeHtml(prod.image || 'https://placehold.co/500x360/ddd/000?text=Sin+imagen')}" class="card-img-top" alt="${escapeHtml(prod.title)}"></a>
+                <div class="card-body">
+                    <span class="eyebrow">${escapeHtml(prod.eyebrow || '')}</span>
+                    <h3><a href="${link}">${escapeHtml(prod.title || '')}</a></h3>
+                    ${priceHtml}
+                    <div class="best-cta-row">
+                        <button type="button" class="btn buy-now" data-title="${escapeHtml(prod.title || '')}" data-price="${Number(discounted || originalPrice)}" aria-label="Comprar ${escapeHtml(prod.title || '')}">Comprar ahora</button>
+                    </div>
+                </div>`;
+            container.appendChild(div);
+            const buyBtn = div.querySelector('.buy-now');
+            if (buyBtn){
+                buyBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const title = buyBtn.dataset.title || prod.title || '';
+                    const price = Number(buyBtn.dataset.price || prod.price || 0) || 0;
+                    try{ addItemToCart({ name: title, price }); } catch(err){ console.warn('No se pudo añadir al carrito', err); }
+                });
+            }
+        });
+        try{ adjustCardTitleAlignment && adjustCardTitleAlignment(container); }catch(e){}
+        try{ if (typeof initHorizontalAutoScroll === 'function') initHorizontalAutoScroll(container); }catch(e){ console.warn('horizontal auto-scroll init failed', e); }
     }
 
     // Center titles if they fully fit; left-align when truncated so the start is visible
@@ -594,7 +641,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // fallback: take last 'count' items (assume array append = newest)
             items = products.slice(-count).reverse();
         }
-        renderCardList(items, container);
+        // render recent products as a horizontal strip (scroll when overflowing)
+        renderRecentStrip(items, container);
     }
 
     function renderAllProducts(){
@@ -867,12 +915,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 discountPercentage: Number(it.discountPercentage) || 0
             };
         });
+        // subtotal before coupons
         const subtotal = items.reduce((s,it) => s + (it.unitPrice * it.qty), 0);
-        const total = items.reduce((s,it) => {
+        // apply any active coupon if applicable
+        const coupon = getActiveCoupon();
+        let couponDiscount = 0;
+        if (coupon && Number(coupon.discountPercent) > 0 && subtotal >= (Number(coupon.minTotal)||0)){
+            couponDiscount = Math.round(subtotal * (Number(coupon.discountPercent) || 0) / 100);
+        }
+        // item-level discounts (offers) still apply per item
+        const totalAfterItemDiscounts = items.reduce((s,it) => {
             const p = Math.round(it.unitPrice * (100 - (Number(it.discountPercentage)||0)) / 100);
             return s + (p * it.qty);
         }, 0);
-        return { id, createdAt: Date.now(), status: 'pending', items, subtotal, total };
+        // final total subtracting coupon (coupon is global after item discounts)
+        const total = Math.max(0, totalAfterItemDiscounts - couponDiscount);
+        return { id, createdAt: Date.now(), status: 'pending', items, subtotal, coupon: coupon ? { code: coupon.code, discountPercent: coupon.discountPercent, amount: couponDiscount, expiresAt: coupon.expiresAt } : null, total };
     }
 
     async function persistInvoice(inv){
@@ -1054,7 +1112,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (r.ok){
                         const data = await r.json();
                         // refresh products from API if possible
-                        try{ const r2 = await fetch(base.replace(/\/$/, '') + '/api/products'); if (r2.ok){ DJ_PRODUCTS_DATA = await r2.json(); renderProducts(); renderAllProducts(); renderBestSellersWidget(); } }catch(e){}
+                        try{ const r2 = await fetch(base.replace(/\/$/, '') + '/api/products'); if (r2.ok){ DJ_PRODUCTS_DATA = await r2.json(); renderProducts(); renderAllProducts(); renderBestSellersWidget(); try{ connectPromoSlidesToProducts(); }catch(e){} } }catch(e){}
                         alert('Factura confirmada. Stocks actualizados.');
                         return data;
                     } else {
@@ -1116,6 +1174,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     renderAllProducts();
                     tryRenderProductDetail();
                     startLiveSalesSimulation();
+                    try{ connectPromoSlidesToProducts(); }catch(e){}
                 }, err => {
                     console.warn('Firestore products snapshot error', err);
                 });
@@ -1153,6 +1212,7 @@ document.addEventListener('DOMContentLoaded', () => {
         renderAllProducts();
         tryRenderProductDetail();
         startLiveSalesSimulation();
+                try{ connectPromoSlidesToProducts(); }catch(e){}
     })();
 
     // Admin: abrir el gestor de Ofertas desde el panel (botón en admin.html)
@@ -1255,22 +1315,97 @@ document.addEventListener('DOMContentLoaded', () => {
         cartCountEl.innerText = totalUnits;
         cartItemsContainer.innerHTML = '';
         if (cart.length === 0) {
-            cartItemsContainer.innerHTML = '<p style="color:#666">Tu carrito está vacío.</p>';
+            cartItemsContainer.innerHTML = '<p class="cart-empty" style="color:#666">Tu carrito está vacío.</p>';
         } else {
             cart.forEach((it, idx) => {
                 const qty = Number(it.qty) || 1;
                 const subtotal = (Number(it.price) || 0) * qty;
+                // try to find product image from repo data
+                const prodMatch = (DJ_PRODUCTS_DATA || []).find(p => (p.title||p.name) === it.name) || {};
+                const imgSrc = escapeHtml(it.image || prodMatch.image || 'https://placehold.co/80x80/ddd/000?text=img');
                 const div = document.createElement('div');
                 div.className = 'cart-item';
-                div.innerHTML = `<div><strong>${escapeHtml(it.name)}</strong><div style="font-size:0.9rem;color:#666">${formatCOP(it.price)}${qty>1? ' ×'+qty + ' = ' + formatCOP(subtotal) : ''}</div></div><div><button data-idx="${idx}" class="btn-remove">Eliminar</button></div>`;
+                div.innerHTML = `
+                    <img src="${imgSrc}" alt="${escapeHtml(it.name)}" class="cart-item-img" />
+                    <div class="cart-item-info">
+                        <strong>${escapeHtml(it.name)}</strong>
+                        <div class="cart-item-meta">
+                            <span class="cart-item-price">${formatCOP(it.price)}${qty>1? ' ×'+qty + ' = ' + formatCOP(subtotal) : ''}</span>
+                            <div class="qty-controls">
+                                <button class="qty-btn" data-idx="${idx}" data-op="dec">−</button>
+                                <input class="qty-input" data-idx="${idx}" type="number" min="1" value="${qty}" />
+                                <button class="qty-btn" data-idx="${idx}" data-op="inc">+</button>
+                            </div>
+                        </div>
+                    </div>
+                    <button data-idx="${idx}" class="btn-remove icon" aria-label="Eliminar item">✕</button>
+                `;
                 cartItemsContainer.appendChild(div);
             });
         }
-        cartTotalEl.innerText = formatCOP(cartTotal());
+        // compute subtotal and apply coupon if active
+        const subtotal = cartTotal();
+        const activeCoupon = getActiveCoupon();
+        let couponDiscount = 0;
+        const minTotal = activeCoupon ? (Number(activeCoupon.minTotal) || 0) : 0;
+        if (activeCoupon && subtotal >= minTotal){
+            couponDiscount = Math.round(subtotal * (Number(activeCoupon.discountPercent) || 0) / 100);
+        }
+        // ensure cart discount display exists
+        try{
+            const footer = cartPanel.querySelector('.cart-footer');
+            if (footer){
+                let discountRow = footer.querySelector('#cart-discount');
+                if (!discountRow){
+                    discountRow = document.createElement('div');
+                    discountRow.id = 'cart-discount';
+                    discountRow.style.fontSize = '0.95rem';
+                    discountRow.style.color = 'var(--muted)';
+                    discountRow.style.display = 'none';
+                    footer.insertBefore(discountRow, footer.firstChild);
+                }
+                if (activeCoupon){
+                    if (couponDiscount > 0){
+                        discountRow.style.display = '';
+                        discountRow.innerHTML = `Cupón <strong>${escapeHtml(activeCoupon.code)}</strong> aplicado: -${formatCOP(couponDiscount)} <button id="remove-coupon-btn" class="btn-outline small" style="margin-left:8px">Quitar cupón</button>`;
+                        const btn = discountRow.querySelector('#remove-coupon-btn');
+                        if (btn) btn.addEventListener('click', (e)=>{ e.preventDefault(); removeCoupon(); });
+                    } else {
+                        discountRow.style.display = '';
+                        discountRow.innerHTML = `Cupón <strong>${escapeHtml(activeCoupon.code)}</strong> tomado — válido para compras mayores a ${formatCOP(activeCoupon.minTotal)}. <button id="remove-coupon-btn" class="btn-outline small" style="margin-left:8px">Quitar</button>`;
+                        const btn = discountRow.querySelector('#remove-coupon-btn');
+                        if (btn) btn.addEventListener('click', (e)=>{ e.preventDefault(); removeCoupon(); });
+                    }
+                } else {
+                    discountRow.style.display = 'none';
+                    discountRow.innerHTML = '';
+                }
+            }
+        }catch(e){ /* ignore UI errors */ }
 
-        // attach remove handlers
-        const removes = document.querySelectorAll('.btn-remove');
-        removes.forEach(btn => btn.addEventListener('click', (e) => {
+        const finalTotal = Math.max(0, subtotal - (couponDiscount || 0));
+        cartTotalEl.innerText = formatCOP(finalTotal);
+
+        // attach handlers for qty controls and remove buttons
+        cartItemsContainer.querySelectorAll('.qty-btn').forEach(btn => btn.addEventListener('click', (e) => {
+            const idx = Number(btn.dataset.idx);
+            const op = btn.dataset.op;
+            if (!cart[idx]) return;
+            if (op === 'inc') cart[idx].qty = (Number(cart[idx].qty) || 1) + 1;
+            else cart[idx].qty = Math.max(1, (Number(cart[idx].qty) || 1) - 1);
+            saveCart();
+            updateCartDisplay();
+        }));
+
+        cartItemsContainer.querySelectorAll('.qty-input').forEach(inp => inp.addEventListener('change', (e) => {
+            const idx = Number(inp.dataset.idx);
+            if (!cart[idx]) return;
+            cart[idx].qty = Math.max(1, Number(inp.value) || 1);
+            saveCart();
+            updateCartDisplay();
+        }));
+
+        cartItemsContainer.querySelectorAll('.btn-remove').forEach(btn => btn.addEventListener('click', (e) => {
             const idx = parseInt(btn.dataset.idx, 10);
             removeItemFromCart(idx);
         }));
@@ -1456,5 +1591,591 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Attach handlers to any present search/categories controls on load
+    // Initialize promo slider for homepage banners
+    function initPromoSlider(){
+        try{
+            const slider = document.getElementById('promo-slider');
+            if (!slider) return;
+            const slides = Array.from(slider.querySelectorAll('.promo-slide'));
+            if (!slides.length) return;
+            // create dots
+            const dots = document.createElement('div'); dots.className = 'dots';
+            slides.forEach((s, i) =>{
+                if (i === 0) s.classList.add('active'); else s.classList.remove('active');
+                const d = document.createElement('button'); d.className = 'dot' + (i===0? ' active':'' ); d.type = 'button';
+                d.addEventListener('click', ()=>{ goTo(i); });
+                dots.appendChild(d);
+            });
+            slider.appendChild(dots);
+            let cur = 0; let timer = null;
+            function goTo(n){
+                if (n === cur) return;
+                slides[cur].classList.remove('active');
+                dots.children[cur].classList.remove('active');
+                cur = n;
+                slides[cur].classList.add('active');
+                dots.children[cur].classList.add('active');
+            }
+            function next(){ goTo((cur + 1) % slides.length); }
+            function reset(){ if (timer) clearInterval(timer); if (slides.length>1) timer = setInterval(next, 4200); }
+            reset();
+            // pause on hover
+            slider.addEventListener('mouseenter', ()=> { if (timer) clearInterval(timer); });
+            slider.addEventListener('mouseleave', ()=> { reset(); });
+        }catch(e){ console.warn('promo slider init failed', e); }
+    }
+
+        // Connect promo slides to products when product data is available
+        function connectPromoSlidesToProducts(){
+            try{
+                const slider = document.getElementById('promo-slider');
+                if (!slider) return;
+                const slides = Array.from(slider.querySelectorAll('a.promo-slide'));
+                const products = DJ_PRODUCTS_DATA || [];
+                if (!products.length) return;
+
+                const normalize = (s='') => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[-_]/g,' ').replace(/\s+/g,' ').trim();
+
+                slides.forEach(a => {
+                    const img = a.querySelector('img');
+                    if (!img) return;
+                    const src = img.getAttribute('src') || '';
+                    const basename = src.split('/').pop() || '';
+                    const nameNoExt = basename.replace(/\.[^/.]+$/, '');
+                    const targetKey = normalize(nameNoExt);
+
+                    let found = products.find(p => {
+                        try{
+                            const pimg = normalize((p.image || ''));
+                            if (pimg && pimg.indexOf(targetKey) !== -1) return true;
+                            const ptitle = normalize(p.title || p.name || '');
+                            if (ptitle && ptitle.indexOf(targetKey) !== -1) return true;
+                            // also try without the word 'banner' or 'bann' prefixes
+                            const cleaned = targetKey.replace(/^banner\s*/,'').replace(/^bann\s*/,'');
+                            if (cleaned && (pimg.indexOf(cleaned) !== -1 || ptitle.indexOf(cleaned) !== -1)) return true;
+                        }catch(e){ /* ignore */ }
+                        return false;
+                    });
+
+                    if (found){
+                        const link = found.id ? `product.html?id=${encodeURIComponent(found.id)}` : `product.html?title=${encodeURIComponent(found.title||found.name||'')}`;
+                        a.setAttribute('href', link);
+                        a.setAttribute('aria-label', 'Ver producto: ' + (found.title || found.name || ''));
+                        a.dataset.productId = found.id || (found.title || found.name || '');
+                        try{ img.setAttribute('alt', (found.title || found.name || '') + ' — ' + (img.getAttribute('alt')||'')); }catch(e){}
+                    }
+                });
+            }catch(e){ console.warn('connectPromoSlidesToProducts failed', e); }
+        }
+
+    // Auto-scroll for horizontal scrollers (advance one product at a time, infinite loop)
+    function initHorizontalAutoScroll(containerOrSelector, opts = {}){
+        try{
+            const interval = Number(opts.interval) || 2800; // ms between advances
+            const duration = Number(opts.duration) || 450; // ms animation time
+            let container = null;
+            if (!containerOrSelector) return;
+            if (typeof containerOrSelector === 'string'){
+                container = document.getElementById(containerOrSelector) || document.querySelector(containerOrSelector);
+            } else if (containerOrSelector instanceof Element){
+                container = containerOrSelector;
+            } else { return; }
+            if (!container) return;
+
+            // Cleanup previous instance if any
+            if (container._bestScrollCleanup){ try{ container._bestScrollCleanup(); }catch(e){} }
+
+            // collect original item nodes (ignore existing clones)
+            const originals = Array.from(container.children).filter(n => n && n.nodeType === 1);
+            if (!originals.length || originals.length <= 1) return;
+
+            // disable scroll-snap while auto-driving
+            const origSnap = container.style.scrollSnapType || '';
+            container.style.scrollSnapType = 'none';
+
+            // append clones of original items to enable seamless looping
+            const clones = originals.map(n => n.cloneNode(true));
+            clones.forEach(c => container.appendChild(c));
+            container._hscrollClones = clones;
+
+            // reattach buy handlers on clones so buttons work
+            try{
+                clones.forEach(cl => {
+                    cl.querySelectorAll && cl.querySelectorAll('.buy-now').forEach(b => {
+                        b.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            const title = b.dataset.title || b.getAttribute('data-title') || '';
+                            const price = Number(b.dataset.price || b.getAttribute('data-price') || 0) || 0;
+                            try{ addItemToCart({ name: title, price }); }catch(err){ console.warn('add to cart failed', err); }
+                        });
+                    });
+                });
+            }catch(e){}
+
+            // layout measurements
+            let gap = 0;
+            let itemWidths = [];
+            let itemOffsets = [];
+            let origTotal = 0;
+
+            function computeLayout(){
+                try{ gap = parseFloat(getComputedStyle(container).gap || getComputedStyle(container).columnGap || '0') || 0; }catch(e){ gap = 0; }
+                itemWidths = originals.map(el => Math.round(el.getBoundingClientRect().width));
+                itemOffsets = [];
+                let acc = 0;
+                for (let i = 0; i < itemWidths.length; i++){
+                    itemOffsets.push(acc);
+                    acc += itemWidths[i];
+                    if (i < itemWidths.length - 1) acc += gap;
+                }
+                origTotal = Math.max(1, acc);
+            }
+
+            computeLayout();
+            // recalc when images load
+            const imgs = Array.from(container.querySelectorAll('img'));
+            let pending = imgs.length;
+            if (pending === 0) computeLayout();
+            else {
+                imgs.forEach(img => {
+                    if (img.complete) pending--; else img.addEventListener('load', ()=>{ pending--; if (pending<=0) computeLayout(); }, { once:true });
+                });
+                setTimeout(computeLayout, 400);
+            }
+
+            // animation state
+            let currentIndex = 0;
+            let autoTimer = null;
+            let rafId = null;
+            let paused = false;
+            let resumeTimeout = null;
+            let animating = false;
+            let scrollTick = null;
+
+            function easeInOutQuad(t){ return t < 0.5 ? 2*t*t : -1 + (4 - 2*t)*t; }
+
+            function smoothScrollTo(target){
+                if (rafId) cancelAnimationFrame(rafId);
+                return new Promise((resolve) => {
+                    const start = container.scrollLeft;
+                    const change = target - start;
+                    const startTime = performance.now();
+                    function animate(now){
+                        const t = Math.min(1, (now - startTime) / duration);
+                        const eased = easeInOutQuad(t);
+                        container.scrollLeft = start + change * eased;
+                        if (t < 1) rafId = requestAnimationFrame(animate);
+                        else {
+                            rafId = null;
+                            if (container.scrollLeft >= origTotal) container.scrollLeft -= origTotal;
+                            resolve();
+                        }
+                    }
+                    rafId = requestAnimationFrame(animate);
+                });
+            }
+
+            function computeTargetForIndex(index){
+                const loops = Math.floor(index / originals.length);
+                const idx = index % originals.length;
+                return (itemOffsets[idx] || 0) + (loops * origTotal);
+            }
+
+            function advance(){
+                if (paused || animating) return;
+                animating = true;
+                currentIndex++;
+                const target = computeTargetForIndex(currentIndex);
+                smoothScrollTo(target).then(()=>{ animating = false; });
+            }
+
+            function startAuto(){ if (autoTimer) clearInterval(autoTimer); autoTimer = setInterval(advance, interval); }
+            function stopAuto(){ if (autoTimer) clearInterval(autoTimer); autoTimer = null; if (rafId) { cancelAnimationFrame(rafId); rafId = null; } }
+
+            function pauseTemporary(ms = 3500){ paused = true; if (resumeTimeout) clearTimeout(resumeTimeout); resumeTimeout = setTimeout(()=>{ paused = false; resumeTimeout = null; }, ms); }
+            function pauseNow(){ paused = true; if (resumeTimeout){ clearTimeout(resumeTimeout); resumeTimeout = null; } }
+            function resumeNow(){ paused = false; }
+
+            // event handlers
+            const onEnter = () => pauseNow();
+            const onLeave = () => resumeNow();
+            const onUserInteract = () => pauseTemporary(opts.pauseAfterInteract || 3500);
+            const onScroll = () => {
+                if (animating) return;
+                if (scrollTick) clearTimeout(scrollTick);
+                scrollTick = setTimeout(()=>{
+                    const pos = container.scrollLeft % origTotal;
+                    let nearest = 0; let best = Infinity;
+                    for (let i = 0; i < itemOffsets.length; i++){
+                        const d = Math.abs(pos - itemOffsets[i]);
+                        if (d < best){ best = d; nearest = i; }
+                    }
+                    currentIndex = nearest;
+                }, 120);
+            };
+
+            const onResize = () => { computeLayout(); };
+
+            container.addEventListener('mouseenter', onEnter);
+            container.addEventListener('mouseleave', onLeave);
+            container.addEventListener('pointerdown', onUserInteract, { passive: true });
+            container.addEventListener('touchstart', onUserInteract, { passive: true });
+            container.addEventListener('wheel', onUserInteract, { passive: true });
+            container.addEventListener('scroll', onScroll);
+            window.addEventListener('resize', onResize);
+
+            container._bestScrollCleanup = function(){
+                stopAuto();
+                try{ container.removeEventListener('mouseenter', onEnter); }catch(e){}
+                try{ container.removeEventListener('mouseleave', onLeave); }catch(e){}
+                try{ container.removeEventListener('pointerdown', onUserInteract); }catch(e){}
+                try{ container.removeEventListener('touchstart', onUserInteract); }catch(e){}
+                try{ container.removeEventListener('wheel', onUserInteract); }catch(e){}
+                try{ container.removeEventListener('scroll', onScroll); }catch(e){}
+                try{ window.removeEventListener('resize', onResize); }catch(e){}
+                if (resumeTimeout) { clearTimeout(resumeTimeout); resumeTimeout = null; }
+                // remove clones
+                try{ if (container._hscrollClones){ container._hscrollClones.forEach(c=> c.remove()); delete container._hscrollClones; } }catch(e){}
+                // restore scroll-snap
+                try{ container.style.scrollSnapType = origSnap || ''; }catch(e){}
+                container._bestScrollCleanup = null;
+            };
+
+            // start from beginning and auto-advance
+            try{ container.scrollLeft = 0; }catch(e){}
+            startAuto();
+        }catch(e){ console.warn('initHorizontalAutoScroll error', e); }
+    }
+
     attachSearchCategoriesHandlers();
+    initPromoSlider();
 });
+
+// Global dynamic promo bar: replace the top `.promo-bar` on any page
+function initGlobalPromoBar(){
+    try{
+        const phraseTemplates = {
+            'labios': [
+                '{title} — labios irresistibles que hablan por ti.',
+                'Atrévete con {title}: color y confianza todo el día.',
+                '{title}: pinta tu mejor versión ahora.',
+                'Luce radiante con {title} y sonríe sin miedo.'
+            ],
+            'piel': [
+                '{title} — glow inmediato, piel que inspira.',
+                'Renueva tu rutina con {title} y siente la diferencia.',
+                '{title}: hidratación y luminosidad en cada aplicación.',
+                'Descubre la textura de {title} y presume piel sana.'
+            ],
+            'ojos': [
+                '{title} — mirada que atrapa todas las miradas.',
+                'Destaca tu mirada con {title} y sorprende.',
+                '{title}: color intenso para looks memorables.',
+                'Dale a tus ojos poder con {title}.'
+            ],
+            'brochas': [
+                '{title} — herramientas pro para resultados perfectos.',
+                'Eleva tu técnica con {title}.',
+                '{title}: precisión y acabado profesional.',
+                'Acaba tu look con {title} y marca la diferencia.'
+            ],
+            'serum': [
+                '{title} — cuidado que transforma la piel.',
+                'Dale a tu piel el amor que merece con {title}.',
+                '{title}: potencia tu rutina con resultados visibles.',
+                'Nutre, repara y revela con {title}.'
+            ],
+            'paleta': [
+                '{title} — combina y crea looks infinitos.',
+                'Versatilidad y color con {title}.',
+                '{title}: tu aliado para maquillajes de impacto.',
+                'Crea, mezcla y brilla con {title}.'
+            ],
+            'brillo': [
+                '{title} — destellos que suman confianza.',
+                'Un toque de {title} y listo para brillar.'
+            ]
+        };
+
+        const generalTemplates = [
+            '{title} — tu nuevo must-have para cada día.',
+            'Haz que te pregunten por tu look: {title}.',
+            'Brilla con confianza: prueba {title} hoy.',
+            'Transforma tu rutina con {title} y siéntete increíble.',
+            '{title}: estilo, color y actitud en un solo paso.',
+            'Suma un toque de magia con {title}.',
+            'Pequeños detalles, grandes cambios — prueba {title}.',
+            'Atrévete a cambiar: {title} te acompaña.',
+            'Vuelve cada día un poco más tú con {title}.',
+            'Descubre por qué todos hablan de {title}.'
+        ];
+
+        function rand(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+        function findOrCreateBar(){
+            let bar = document.querySelector('.promo-bar');
+            if (!bar){
+                bar = document.createElement('div');
+                bar.className = 'promo-bar';
+                document.body.insertBefore(bar, document.body.firstChild);
+            }
+            bar.setAttribute('aria-live','polite');
+            let msgEl = bar.querySelector('.promo-message');
+            if (!msgEl){
+                msgEl = document.createElement('span');
+                msgEl.className = 'promo-message';
+                msgEl.style.display = 'inline-block';
+                msgEl.style.opacity = 0;
+                msgEl.style.transition = 'opacity .35s ease';
+                msgEl.style.textTransform = 'none';
+                bar.innerHTML = '';
+                bar.appendChild(msgEl);
+            }
+            return { bar, msgEl };
+        }
+
+        function getProductsFromSource(){
+            if (Array.isArray(window.DJ_PRODUCTS_DATA) && window.DJ_PRODUCTS_DATA.length){
+                return window.DJ_PRODUCTS_DATA.map(p => ({ title: p.title || p.name || 'Producto', href: p.id ? 'product.html?id=' + encodeURIComponent(p.id) : 'product.html', eyebrow: p.eyebrow || '' }));
+            }
+            const cards = Array.from(document.querySelectorAll('.grid-container .card'));
+            const products = cards.map(card => {
+                const a = card.querySelector('h3 a') || card.querySelector('h3');
+                const eyebrowEl = card.querySelector('.eyebrow');
+                const title = a ? (a.textContent || a.innerText || '').trim() : 'Producto';
+                const href = (a && a.getAttribute) ? (a.getAttribute('href') || 'product.html') : 'product.html';
+                const eyebrow = eyebrowEl ? eyebrowEl.textContent.trim() : '';
+                return { title, href, eyebrow };
+            }).filter(p => p.title);
+            if (products.length) return products;
+            return [
+                { title: 'Labial Lip Crush Velvet', href: 'product.html', eyebrow: 'Labios' },
+                { title: 'Serum Glass Skin 24h', href: 'product.html', eyebrow: 'Piel Glow' },
+                { title: 'Paleta Nude Attraction', href: 'product.html', eyebrow: 'Ojos' },
+                { title: 'Brillo Labial Shine', href: 'product.html', eyebrow: 'Labios' },
+                { title: 'Kit Glow Express', href: 'product.html', eyebrow: 'Piel Glow' }
+            ];
+        }
+
+        function pickTemplateFor(eyebrow){
+            if (!eyebrow) return rand(generalTemplates);
+            const key = eyebrow.toLowerCase();
+            for (const k in phraseTemplates){ if (key.indexOf(k) !== -1) return rand(phraseTemplates[k]); }
+            return rand(generalTemplates);
+        }
+
+        function renderMessageFor(prod, msgEl){
+            if (!prod) return;
+            const tpl = pickTemplateFor(prod.eyebrow || '');
+            const text = tpl.replace('{title}', prod.title);
+            try{ msgEl.style.opacity = 0; }catch(e){}
+            setTimeout(() => {
+                msgEl.innerHTML = '';
+                const a = document.createElement('a');
+                a.href = prod.href || 'product.html';
+                a.style.color = 'inherit';
+                a.style.textDecoration = 'none';
+                a.style.fontWeight = '800';
+                a.textContent = text;
+                msgEl.appendChild(a);
+                try{ msgEl.style.opacity = 1; }catch(e){}
+            }, 300);
+        }
+
+        function startRotation(bar, msgEl){
+            let products = getProductsFromSource();
+            renderMessageFor(rand(products), msgEl);
+            if (bar.__promoInterval__) clearInterval(bar.__promoInterval__);
+            bar.__promoInterval__ = setInterval(() => {
+                products = getProductsFromSource();
+                renderMessageFor(rand(products), msgEl);
+            }, 4200 + Math.floor(Math.random()*1800));
+        }
+
+        const { bar, msgEl } = findOrCreateBar();
+        let attempts = 0;
+        function waitForReady(){
+            const list = getProductsFromSource();
+            if (list.length || attempts > 40){ startRotation(bar, msgEl); return; }
+            attempts++;
+            setTimeout(waitForReady, 300);
+        }
+        waitForReady();
+
+        window.addEventListener('beforeunload', ()=>{ try{ if (bar.__promoInterval__) clearInterval(bar.__promoInterval__); }catch(e){} });
+
+    }catch(e){ console.warn('initGlobalPromoBar failed', e); }
+}
+
+// Initialize global promo bar on load
+try{ initGlobalPromoBar(); }catch(e){ /* ignore */ }
+
+// User panel UI: fixed icon + access modal (demo auth)
+function initUserPanelUI(){
+    try{
+        let btn = document.getElementById('user-panel-btn') || document.querySelector('.user-panel-btn');
+        if (!btn){
+            btn = document.createElement('button');
+            btn.id = 'user-panel-btn';
+            btn.className = 'user-panel-btn';
+            btn.setAttribute('aria-label','Acceso panel');
+            btn.title = 'Panel';
+            btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-3-3.87"></path><path d="M4 21v-2a4 4 0 0 1 3-3.87"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
+            document.body.appendChild(btn);
+        }
+
+        if (document.querySelector('.admin-modal')){
+            // already initialized
+        } else {
+            const modal = document.createElement('div');
+            modal.className = 'admin-modal';
+            modal.setAttribute('role','dialog');
+            modal.setAttribute('aria-modal','true');
+            modal.setAttribute('aria-hidden','true');
+            modal.innerHTML = `
+                <div class="modal-backdrop"></div>
+                <div class="modal-card">
+                    <button class="admin-modal-close" aria-label="Cerrar">✕</button>
+                    <h3>Acceso al Panel</h3>
+                    <p style="color:var(--muted);margin-top:6px">Ingresa la contraseña de administrador (demo).</p>
+                    <form id="admin-login-form">
+                        <input name="username" placeholder="Usuario (opcional)" class="admin-input" />
+                        <input name="password" type="password" placeholder="Contraseña" class="admin-input" />
+                        <div class="error" aria-live="polite"></div>
+                        <div class="modal-actions"><button type="submit" class="btn">Ingresar</button><button type="button" class="btn-outline admin-modal-cancel">Cancelar</button></div>
+                    </form>
+                </div>`;
+            document.body.appendChild(modal);
+
+            const show = () => { modal.classList.add('show'); modal.setAttribute('aria-hidden','false'); const pw = modal.querySelector('input[name="password"]'); try{ pw && pw.focus(); }catch(e){} };
+            const hide = () => { modal.classList.remove('show'); modal.setAttribute('aria-hidden','true'); };
+
+            btn.addEventListener('click', (e) => { e.preventDefault(); show(); });
+            modal.querySelector('.admin-modal-close').addEventListener('click', hide);
+            modal.querySelector('.admin-modal-cancel').addEventListener('click', hide);
+            modal.querySelector('.modal-backdrop').addEventListener('click', hide);
+
+            modal.querySelector('#admin-login-form').addEventListener('submit', (e) => {
+                e.preventDefault();
+                const form = e.target;
+                const pwd = (form.password.value || '').trim();
+                if (pwd === 'admin123'){
+                    sessionStorage.setItem('admin_authed','1');
+                    hide();
+                    window.location.href = 'admin/index.html';
+                } else {
+                    const err = modal.querySelector('.error'); err.textContent = 'Acceso denegado'; err.style.display = 'block';
+                }
+            });
+
+            document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') hide(); });
+        }
+    }catch(e){ console.warn('initUserPanelUI failed', e); }
+}
+
+try{ initUserPanelUI(); }catch(e){ /* ignore */ }
+
+// Coupon popup: appears only on first visit. 5% off for purchases > 50.000 COP, valid 60 minutes.
+function getActiveCoupon(){
+    try{
+        const raw = localStorage.getItem('dj_coupon_active');
+        if (!raw) return null;
+        const c = JSON.parse(raw);
+        if (!c || !c.expiresAt) { localStorage.removeItem('dj_coupon_active'); return null; }
+        if (Date.now() > Number(c.expiresAt)){
+            localStorage.removeItem('dj_coupon_active'); return null;
+        }
+        return c;
+    }catch(e){ return null; }
+}
+
+function removeCoupon(){
+    try{ localStorage.removeItem('dj_coupon_active'); updateCartDisplay(); }catch(e){}
+}
+
+function scheduleCouponExpiry(){
+    try{
+        const c = getActiveCoupon();
+        if (!c) return;
+        const ms = Number(c.expiresAt) - Date.now();
+        if (ms <= 0){ removeCoupon(); return; }
+        if (window.__dj_coupon_expiry_timer) clearTimeout(window.__dj_coupon_expiry_timer);
+        window.__dj_coupon_expiry_timer = setTimeout(()=>{
+            try{ removeCoupon(); alert('Tu cupón ha expirado.'); }catch(e){}
+        }, ms + 500);
+    }catch(e){ }
+}
+
+function generateCouponCode(){
+    const s = Math.random().toString(36).slice(2).toUpperCase();
+    return 'DJ5-' + s.slice(0,6);
+}
+
+function initCouponPopup(opts = {}){
+    try{
+        // allow forcing the popup for testing with URL param/hash: ?showcoupon or #showcoupon
+        const debugShow = (location.search && location.search.indexOf('showcoupon') !== -1) || (location.hash && location.hash.indexOf('showcoupon') !== -1);
+        // If caller requested force (e.g. after 10s check), bypass the 'seen' guard
+        const forceShow = Boolean(opts.force) || debugShow;
+        if (localStorage.getItem('dj_coupon_seen') && !forceShow) return; // already shown before
+        // build popup node (non-blocking, unobtrusive)
+        const popup = document.createElement('div');
+        popup.className = 'coupon-popup';
+        popup.innerHTML = `
+            <div class="coupon-inner">
+                <button class="coupon-close" aria-label="Cerrar">✕</button>
+                <div class="coupon-top">Tienes un cupón</div>
+                <div class="coupon-body">5% de descuento en compras mayores a <strong>${formatCOP(50000)}</strong><br/><small>válido por 60 minutos</small></div>
+                <div class="coupon-code">Code: <strong id="coupon-code">-</strong></div>
+                <div class="coupon-actions"><button id="take-coupon-btn" class="btn">Tomar cupón</button></div>
+            </div>`;
+        document.body.appendChild(popup);
+
+        // style and set code only when user takes it (generate code then)
+        const closeBtn = popup.querySelector('.coupon-close');
+        closeBtn.addEventListener('click', (e)=>{ e.preventDefault(); try{ popup.remove(); }catch(ex){} localStorage.setItem('dj_coupon_seen','1'); });
+
+        const takeBtn = popup.querySelector('#take-coupon-btn');
+        takeBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const code = generateCouponCode();
+            const now = Date.now();
+            const expires = now + (60 * 60 * 1000);
+            const couponObj = { code, issuedAt: now, expiresAt: expires, discountPercent: 5, minTotal: 50000 };
+            try{ localStorage.setItem('dj_coupon_active', JSON.stringify(couponObj)); }catch(e){}
+            // mark as seen so popup won't show again
+            localStorage.setItem('dj_coupon_seen','1');
+            if (debugShow) console.info('Coupon debug: forced show via URL param/hash');
+            // update UI: show code briefly then remove
+            const codeEl = popup.querySelector('#coupon-code'); if (codeEl) codeEl.textContent = code;
+            // apply to cart and refresh display
+            try{ updateCartDisplay(); scheduleCouponExpiry(); showAddToCartToast('Cupón ' + code + ' aplicado', 1); }catch(e){}
+            setTimeout(()=>{ try{ popup.remove(); }catch(e){} }, 900);
+        });
+
+        // auto-hide after 10s if user doesn't interact (but still mark as seen so it won't show again)
+        setTimeout(()=>{ if (document.body.contains(popup)){ try{ popup.remove(); }catch(e){} localStorage.setItem('dj_coupon_seen','1'); } }, 10000);
+
+    }catch(e){ console.warn('initCouponPopup failed', e); }
+}
+
+// initialize coupon state on load
+try{
+    scheduleCouponExpiry();
+    // Monitor for presence of an active coupon during the first 10 seconds.
+    // If no coupon becomes active in that window, show the popup (force show).
+    (function monitorCouponForFirst10s(){
+        const checkInterval = 700;
+        const maxMs = 10000;
+        const maxChecks = Math.ceil(maxMs / checkInterval);
+        let checks = 0;
+        const iv = setInterval(()=>{
+            checks++;
+            try{ if (getActiveCoupon()){ clearInterval(iv); return; } }catch(e){ /* ignore */ }
+            if (checks >= maxChecks){
+                clearInterval(iv);
+                try{ initCouponPopup({ force: true }); }catch(e){}
+            }
+        }, checkInterval);
+    })();
+}catch(e){ }
