@@ -293,12 +293,41 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
+        // Offer detection helpers
+        function isOnOffer(p){
+            if (!p) return false;
+            const dp = Number(p.discountPercentage || p.discount || p.offerPercent || 0) || 0;
+            const flag = Boolean(p.onOffer || p.oferta || p.isOffer || p.on_sale || p.sale);
+            const hasOfferPrice = (typeof p.offerPrice !== 'undefined' && p.offerPrice !== null) || (typeof p.salePrice !== 'undefined' && p.salePrice !== null) || (typeof p.discountedPrice !== 'undefined' && p.discountedPrice !== null);
+            return dp > 0 || flag || hasOfferPrice;
+        }
+
+        try{
+            const path = (window.location.pathname || '').split('/').pop().toLowerCase();
+            const isPublicOffersPage = (path === 'ofertas.html' || path === 'ofertas');
+            // Public offers page: show only products that are on offer
+            if (isPublicOffersPage){
+                items = items.filter(isOnOffer);
+            }
+            // Admin offers panel: do not filter out products here (we show all), ordering handled later
+        }catch(e){ /* ignore path parsing errors and continue rendering normally */ }
+
         // Apply sorting if requested (sort by effective price when discounts present)
         if (currentSort === 'price-asc'){
             items = items.slice().sort((a,b)=> (Number(getDiscountedPrice(a))||0) - (Number(getDiscountedPrice(b))||0));
         } else if (currentSort === 'price-desc'){
             items = items.slice().sort((a,b)=> (Number(getDiscountedPrice(b))||0) - (Number(getDiscountedPrice(a))||0));
         }
+
+        // If admin offers panel is active, place offered products first while preserving relative order
+        try{
+            if (adminOffersActive === true){
+                const offered = [];
+                const rest = [];
+                items.forEach(p => { if (isOnOffer(p)) offered.push(p); else rest.push(p); });
+                items = offered.concat(rest);
+            }
+        }catch(e){ /* ignore */ }
         grid.innerHTML = '';
         items.forEach((prod, idx) => {
             const div = document.createElement('div');
@@ -326,7 +355,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     ${priceHtml}
                     <p class="stock">Disponibles: ${prod.stock || 0} unidades</p>
                     <div style="display:flex;gap:8px">
-                        <button class="btn btn-buy">Añadir al Carrito</button>
+                        ${!adminOffersActive ? '<button class="btn btn-buy">Añadir al Carrito</button>' : ''}
                         ${sessionStorage.getItem('admin_authed') && adminOffersActive ? '<button class="btn btn-edit-offer">Editar oferta</button>' : ''}
                     </div>
                 </div>`;
@@ -873,31 +902,83 @@ document.addEventListener('DOMContentLoaded', () => {
         const editor = document.createElement('div');
         editor.className = 'offer-editor';
         editor.style.marginTop = '10px';
-        const initial = Number(prod.discountPercentage) || 0;
+        const initial = Math.max(0, Math.min(100, Number(prod.discountPercentage) || 0));
+
+        const originalPrice = Number(prod.price || 0) || 0;
+        const initialDiscounted = getDiscountedPrice(prod);
+
         editor.innerHTML = `
-            <label style="display:flex;align-items:center;gap:8px"><span>Descuento %</span><input type="number" min="0" max="100" value="${initial}" class="offer-percent" style="width:80px;padding:6px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)" /></label>
-            <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
-                <div class="offer-preview" style="font-weight:800;color:var(--wine-700)">${formatCOP(getDiscountedPrice(prod))}</div>
-                <button class="btn btn-save-offer">Guardar</button>
-                <button class="btn-outline btn-cancel-offer">Cancelar</button>
+            <div style="border-top:1px solid var(--line); margin-top:12px; padding-top:12px;">
+                <div style="margin-bottom:10px">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px">
+                        <label style="font-weight:700; font-size:0.85rem">Descuento: <span class="offer-percent-display">${initial}</span>%</label>
+                        <input type="number" min="0" max="100" value="${initial}" class="offer-percent-input" style="width:50px; padding:3px; border-radius:4px; border:1px solid var(--line); font-size:0.8rem" />
+                    </div>
+                    <input type="range" min="0" max="100" value="${initial}" class="offer-range" style="width:100%; height:4px; cursor:pointer" />
+                </div>
+                
+                <div style="background:var(--blush-100); padding:8px; border-radius:6px; margin-bottom:10px; font-size:0.85rem">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:2px">
+                        <span style="color:var(--muted)">Nuevo precio:</span>
+                        <strong class="offer-preview">${formatCOP(initialDiscounted)}</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.75rem">
+                        <span style="color:var(--muted)">Ahorro:</span>
+                        <span class="offer-savings" style="color:var(--wine-700); font-weight:700">${formatCOP(Math.max(0, originalPrice - initialDiscounted))}</span>
+                    </div>
+                </div>
+
+                <div style="display:flex; gap:6px">
+                    <button class="btn small btn-save-offer" style="flex:1; padding:6px 0">Aplicar</button>
+                    <button class="btn-outline small btn-cancel-offer" style="flex:1; padding:6px 0">Cancelar</button>
+                </div>
             </div>`;
+
         const body = cardEl.querySelector('.card-body') || cardEl;
         body.appendChild(editor);
-        const input = editor.querySelector('.offer-percent');
+
+        const range = editor.querySelector('.offer-range');
+        const numInput = editor.querySelector('.offer-percent-input');
+        const percentDisplay = editor.querySelector('.offer-percent-display');
         const preview = editor.querySelector('.offer-preview');
-        function updatePreview(){
-            const val = Math.max(0, Math.min(100, Number(input.value) || 0));
+        const savingsEl = editor.querySelector('.offer-savings');
+        const saveBtn = editor.querySelector('.btn-save-offer');
+        const cancelBtn = editor.querySelector('.btn-cancel-offer');
+
+        function update(val){
+            val = Math.max(0, Math.min(100, Number(val) || 0));
+            range.value = val;
+            numInput.value = val;
+            percentDisplay.textContent = val;
             const temp = Object.assign({}, prod, { discountPercentage: val });
-            preview.textContent = formatCOP(getDiscountedPrice(temp));
+            const discounted = getDiscountedPrice(temp);
+            preview.textContent = formatCOP(discounted);
+            savingsEl.textContent = formatCOP(Math.max(0, originalPrice - discounted));
         }
-        input.addEventListener('input', updatePreview);
-        editor.querySelector('.btn-cancel-offer').addEventListener('click', () => editor.remove());
-        editor.querySelector('.btn-save-offer').addEventListener('click', async () => {
-            const val = Math.max(0, Math.min(100, Number(input.value) || 0));
-            await applyDiscountToProduct(prod.id || idx, val);
-            editor.remove();
-        });
-        updatePreview();
+
+        range.addEventListener('input', () => update(range.value));
+        numInput.addEventListener('input', () => update(numInput.value));
+        numInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
+
+        cancelBtn.addEventListener('click', () => editor.remove());
+
+        async function save(){
+            const val = Math.max(0, Math.min(100, Number(numInput.value) || 0));
+            try{
+                saveBtn.disabled = true; saveBtn.textContent = 'Guardando...';
+                await applyDiscountToProduct(prod.id || idx, val);
+                saveBtn.textContent = 'Guardado';
+                setTimeout(()=> editor.remove(), 450);
+            }catch(e){
+                console.warn('Save discount failed', e);
+                alert('No se pudo guardar el descuento.');
+                saveBtn.disabled = false; saveBtn.textContent = 'Aplicar';
+            }
+        }
+
+        saveBtn.addEventListener('click', save);
+        // initialize preview with initial value
+        update(initial);
     }
 
     // -----------------------------
@@ -1004,94 +1085,514 @@ document.addEventListener('DOMContentLoaded', () => {
         return invoices.filter(i => i.status === 'confirmed').reduce((s,i) => s + (Number(i.total) || Number(i.subtotal) || 0), 0);
     }
 
+    // ─── Admin Products Panel (rendered inline, no external fetch) ───────────
+    async function renderAdminProductsPanel(area){
+        if (!area) return;
+        area.innerHTML = `
+            <div class="admin-card" style="padding:16px">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+                    <h3 style="margin:0">Gestionar Productos</h3>
+                    <a class="btn small" href="add.html">+ Agregar producto</a>
+                </div>
+                <div id="adm-products-list" style="display:flex;flex-direction:column;gap:10px"></div>
+                <div style="margin-top:12px">
+                    <button id="adm-commit-stock" class="btn" disabled>Actualizar stock</button>
+                </div>
+            </div>`;
+
+        let admProds = null;
+        let admPending = {};  // id -> newStock
+        let admEditing = null;
+
+        // Load products
+        try{
+            const ok = await (window.waitForFirestore ? window.waitForFirestore(4000) : Promise.resolve(false));
+            if (ok && window.__FIRESTORE_DB__){
+                const snap = await window.__FIRESTORE_DB__.collection('products').get();
+                admProds = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            }
+        }catch(e){}
+        if (!admProds || !admProds.length){
+            try{
+                const r = await fetch('/db.json', { cache: 'no-cache' });
+                if (r.ok){ const data = await r.json(); admProds = Array.isArray(data) ? data : (data.products || []); }
+            }catch(e){}
+        }
+        admProds = admProds || DJ_PRODUCTS_DATA || [];
+
+        function admShowToast(msg){ let t=document.getElementById('adm-toast'); if(!t){t=document.createElement('div');t.id='adm-toast';t.className='toast';document.body.appendChild(t);} t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1400); }
+
+        function admRender(){
+            const list = area.querySelector('#adm-products-list');
+            if (!list) return;
+            list.innerHTML = '';
+            if (!admProds || !admProds.length){
+                list.innerHTML = '<p style="color:var(--muted)">No hay productos.</p>';
+                return;
+            }
+            admProds.forEach(p => {
+                const stock = admPending[p.id] !== undefined ? admPending[p.id] : (p.stock || 0);
+                const dirty = admPending[p.id] !== undefined && admPending[p.id] !== p.stock;
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,0.06);flex-wrap:wrap;' + (dirty ? 'background:#fffbe6;' : '');
+                if (admEditing === p.id){
+                    const sv = v => escapeHtml(String(v == null ? '' : v));
+                    row.innerHTML = `
+                        <img src="${escapeHtml(p.image||'')}" style="width:54px;height:54px;object-fit:cover;border-radius:8px;flex-shrink:0" onerror="this.src='https://placehold.co/54x54/eee/999?text=?'">
+                        <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:6px">
+                            <input id="ae-title" value="${sv(p.title)}" placeholder="Título" style="width:100%;padding:5px;border-radius:6px;border:1px solid var(--line)">
+                            <div style="display:flex;gap:6px;flex-wrap:wrap">
+                                <input id="ae-price" type="number" value="${sv(p.price)}" placeholder="Precio" style="width:110px;padding:5px;border-radius:6px;border:1px solid var(--line)">
+                                <input id="ae-stock" type="number" value="${sv(p.stock)}" placeholder="Stock" style="width:80px;padding:5px;border-radius:6px;border:1px solid var(--line)">
+                                <select id="ae-cat" style="padding:5px;border-radius:6px;border:1px solid var(--line);flex:1">
+                                    <option value="">Categoría...</option>
+                                    ${DJ_CATEGORIES.map(c=>`<option value="${escapeHtml(c)}"${p.eyebrow===c?' selected':''}>${escapeHtml(c)}</option>`).join('')}
+                                </select>
+                            </div>
+                            <input id="ae-image" value="${sv(p.image)}" placeholder="URL imagen" style="width:100%;padding:5px;border-radius:6px;border:1px solid var(--line)">
+                            <textarea id="ae-desc" rows="2" placeholder="Descripción" style="width:100%;padding:5px;border-radius:6px;border:1px solid var(--line)">${sv(p.description)}</textarea>
+                            <div style="display:flex;gap:6px">
+                                <button class="btn small adm-save-edit" data-id="${escapeHtml(p.id)}">Guardar</button>
+                                <button class="btn-outline small adm-cancel-edit" data-id="${escapeHtml(p.id)}">Cancelar</button>
+                            </div>
+                        </div>`;
+                } else {
+                    row.innerHTML = `
+                        <img src="${escapeHtml(p.image||'')}" style="width:54px;height:54px;object-fit:cover;border-radius:8px;flex-shrink:0" onerror="this.src='https://placehold.co/54x54/eee/999?text=?'">
+                        <div style="flex:1;min-width:160px">
+                            <div style="font-weight:700;font-size:0.9rem">${escapeHtml(p.title||'')}</div>
+                            <div style="color:var(--muted);font-size:0.8rem">${escapeHtml(p.eyebrow||'')} · ${formatCOP(p.price)}</div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px">
+                            <button class="btn-outline small adm-dec" data-id="${escapeHtml(p.id)}">−</button>
+                            <span id="adm-stock-${escapeHtml(p.id)}" style="font-weight:700;min-width:32px;text-align:center">${stock}</span>
+                            <button class="btn-outline small adm-inc" data-id="${escapeHtml(p.id)}">+</button>
+                        </div>
+                        <div style="display:flex;gap:6px">
+                            <button class="btn small adm-edit" data-id="${escapeHtml(p.id)}">Editar</button>
+                            <button class="btn-outline small adm-del" data-id="${escapeHtml(p.id)}" style="color:#c0392b;border-color:#c0392b">Eliminar</button>
+                        </div>`;
+                }
+                list.appendChild(row);
+            });
+
+            // Stock buttons
+            list.querySelectorAll('.adm-dec').forEach(b => b.addEventListener('click', () => {
+                const id = b.dataset.id; const p = admProds.find(x=>x.id===id); if(!p) return;
+                const cur = admPending[id]!==undefined ? admPending[id] : (p.stock||0);
+                admPending[id] = Math.max(0, cur-1);
+                const el = list.querySelector('#adm-stock-'+id); if(el) el.textContent = admPending[id];
+                b.closest('div[style]').style.background='#fffbe6';
+                area.querySelector('#adm-commit-stock').disabled = false;
+            }));
+            list.querySelectorAll('.adm-inc').forEach(b => b.addEventListener('click', () => {
+                const id = b.dataset.id; const p = admProds.find(x=>x.id===id); if(!p) return;
+                const cur = admPending[id]!==undefined ? admPending[id] : (p.stock||0);
+                admPending[id] = cur+1;
+                const el = list.querySelector('#adm-stock-'+id); if(el) el.textContent = admPending[id];
+                b.closest('div[style]').style.background='#fffbe6';
+                area.querySelector('#adm-commit-stock').disabled = false;
+            }));
+
+            // Edit
+            list.querySelectorAll('.adm-edit').forEach(b => b.addEventListener('click', () => {
+                admEditing = b.dataset.id; admRender();
+            }));
+            list.querySelectorAll('.adm-cancel-edit').forEach(b => b.addEventListener('click', () => {
+                admEditing = null; admRender();
+            }));
+            list.querySelectorAll('.adm-save-edit').forEach(b => b.addEventListener('click', async () => {
+                const id = b.dataset.id;
+                const updated = {
+                    title: area.querySelector('#ae-title')?.value.trim() || '',
+                    price: parseInt(area.querySelector('#ae-price')?.value||'0',10)||0,
+                    stock: parseInt(area.querySelector('#ae-stock')?.value||'0',10)||0,
+                    eyebrow: area.querySelector('#ae-cat')?.value||'',
+                    image: area.querySelector('#ae-image')?.value.trim()||'',
+                    description: area.querySelector('#ae-desc')?.value.trim()||''
+                };
+                if (!updated.title){ admShowToast('El título es obligatorio'); return; }
+                try{
+                    const ok = await (window.waitForFirestore ? window.waitForFirestore(3000) : Promise.resolve(false));
+                    if (ok && window.__FIRESTORE_DB__){
+                        await window.__FIRESTORE_DB__.collection('products').doc(id).update(updated);
+                        admShowToast('Guardado en Firestore');
+                    } else { admShowToast('Guardado localmente'); }
+                }catch(e){ admShowToast('Guardado localmente'); }
+                const idx = admProds.findIndex(x=>x.id===id);
+                if(idx!==-1) admProds[idx] = Object.assign({}, admProds[idx], updated);
+                admEditing = null; admRender();
+            }));
+
+            // Delete
+            list.querySelectorAll('.adm-del').forEach(b => b.addEventListener('click', async () => {
+                if(!confirm('¿Eliminar este producto? No se puede deshacer.')) return;
+                const id = b.dataset.id;
+                try{
+                    const ok = await (window.waitForFirestore ? window.waitForFirestore(3000) : Promise.resolve(false));
+                    if(ok && window.__FIRESTORE_DB__) await window.__FIRESTORE_DB__.collection('products').doc(id).delete();
+                }catch(e){}
+                admProds = admProds.filter(x=>x.id!==id);
+                delete admPending[id];
+                admShowToast('Producto eliminado');
+                admRender();
+            }));
+        }
+
+        // Commit stock
+        area.querySelector('#adm-commit-stock').addEventListener('click', async () => {
+            const ids = Object.keys(admPending);
+            if (!ids.length){ return; }
+            try{
+                const ok = await (window.waitForFirestore ? window.waitForFirestore(3000) : Promise.resolve(false));
+                if(ok && window.__FIRESTORE_DB__){
+                    const batch = window.__FIRESTORE_DB__.batch();
+                    ids.forEach(id => { const ref = window.__FIRESTORE_DB__.collection('products').doc(id); batch.update(ref, { stock: admPending[id] }); });
+                    await batch.commit();
+                    admShowToast('Stock actualizado en Firestore');
+                } else { admShowToast('Stock guardado localmente'); }
+            }catch(e){ admShowToast('No se pudo actualizar el stock'); console.warn(e); }
+            ids.forEach(id=>{ const p=admProds.find(x=>x.id===id); if(p) p.stock=admPending[id]; });
+            admPending = {};
+            area.querySelector('#adm-commit-stock').disabled = true;
+            admRender();
+        });
+
+        admRender();
+    }
+
+    // ─── Admin Staff Panel (rendered inline, no external fetch) ─────────────
+    async function renderAdminStaffPanel(area){
+        if (!area) return;
+        area.innerHTML = `
+            <div class="admin-card" style="padding:16px">
+                <h3 style="margin-bottom:14px">Gestionar Staff</h3>
+                <p id="adm-staff-status" style="font-weight:700;font-size:0.85rem;margin-bottom:12px">⏳ Conectando...</p>
+                <form id="adm-staff-form" class="admin-form" style="max-width:600px">
+                    <label>Nombre completo *<input name="name" required placeholder="Ej: Ana López"></label>
+                    <label>Rol / Cargo<input name="role" placeholder="Ej: Asesora de Belleza"></label>
+                    <label>Bio<textarea name="bio" rows="2" placeholder="Especialidad y experiencia"></textarea></label>
+                    <label>Imagen (URL)<input name="image" placeholder="https://..."></label>
+                    <div style="margin-top:10px">
+                        <button type="submit" class="btn">Agregar miembro</button>
+                    </div>
+                </form>
+                <div id="adm-staff-list" style="margin-top:20px"></div>
+            </div>`;
+
+        const statusEl = area.querySelector('#adm-staff-status');
+        const staffForm = area.querySelector('#adm-staff-form');
+        const staffListEl = area.querySelector('#adm-staff-list');
+
+        function showStatus(ok){ statusEl.textContent = ok ? '🟢 Conectado a Firestore' : '🟡 Modo local (Firestore no disponible)'; statusEl.style.color = ok ? 'green' : '#856404'; }
+        function staffToast(msg){ let t=document.getElementById('adm-toast'); if(!t){t=document.createElement('div');t.id='adm-toast';t.className='toast';document.body.appendChild(t);} t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1400); }
+
+        async function loadStaff(){
+            try{
+                const ok = await (window.waitForFirestore ? window.waitForFirestore(4000) : Promise.resolve(false));
+                if (ok && window.__FIRESTORE_DB__){
+                    showStatus(true);
+                    const snap = await window.__FIRESTORE_DB__.collection('staff').orderBy('name').get();
+                    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                }
+            }catch(e){ console.warn('Firestore staff load failed', e); }
+            showStatus(false);
+            try{ return JSON.parse(localStorage.getItem('dj_staff') || '[]'); }catch(e){ return []; }
+        }
+
+        async function renderStaffList(){
+            staffListEl.innerHTML = '<p style="color:var(--muted)">Cargando...</p>';
+            const arr = await loadStaff();
+            staffListEl.innerHTML = '<h4 style="margin-bottom:10px">Miembros del equipo</h4>';
+            if (!arr.length){ staffListEl.innerHTML += '<p style="color:var(--muted)">Sin miembros aún.</p>'; return; }
+            arr.forEach(m => {
+                const card = document.createElement('div');
+                card.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px;border-radius:10px;border:1px solid rgba(0,0,0,0.07);margin-bottom:8px;flex-wrap:wrap';
+                card.innerHTML = `
+                    ${m.image ? `<img src="${escapeHtml(m.image)}" style="width:46px;height:46px;object-fit:cover;border-radius:50%;flex-shrink:0" onerror="this.style.display='none'">` : ''}
+                    <div style="flex:1;min-width:140px">
+                        <div style="font-weight:700;font-size:0.9rem">${escapeHtml(m.name||'')}</div>
+                        <div style="color:var(--muted);font-size:0.8rem">${escapeHtml(m.role||'')}</div>
+                        ${m.bio ? `<div style="font-size:0.78rem;color:var(--muted);margin-top:2px">${escapeHtml(m.bio)}</div>` : ''}
+                    </div>
+                    <button class="btn-outline small adm-del-staff" data-id="${escapeHtml(m.id||'')}" data-name="${escapeHtml(m.name||'')}" style="color:#c0392b;border-color:#c0392b;align-self:center">Despedir</button>`;
+                staffListEl.appendChild(card);
+            });
+
+            staffListEl.querySelectorAll('.adm-del-staff').forEach(b => b.addEventListener('click', async () => {
+                if (!confirm(`¿Despedir a ${b.dataset.name}? Esta persona será eliminada del equipo.`)) return;
+                const id = b.dataset.id;
+                try{
+                    const ok = await (window.waitForFirestore ? window.waitForFirestore(3000) : Promise.resolve(false));
+                    if (ok && window.__FIRESTORE_DB__) await window.__FIRESTORE_DB__.collection('staff').doc(id).delete();
+                    else {
+                        const arr = JSON.parse(localStorage.getItem('dj_staff')||'[]').filter(x=>x.id!==id);
+                        localStorage.setItem('dj_staff', JSON.stringify(arr));
+                    }
+                }catch(e){ const arr = JSON.parse(localStorage.getItem('dj_staff')||'[]').filter(x=>x.id!==id); localStorage.setItem('dj_staff',JSON.stringify(arr)); }
+                staffToast(`${b.dataset.name} ha sido despedido/a del equipo.`);
+                renderStaffList();
+            }));
+        }
+
+        staffForm.addEventListener('submit', async function(e){
+            e.preventDefault();
+            const member = {
+                name: staffForm.name.value.trim(),
+                role: staffForm.role.value.trim(),
+                bio: staffForm.bio.value.trim(),
+                image: staffForm.image.value.trim()
+            };
+            if (!member.name){ staffToast('El nombre es obligatorio'); return; }
+            try{
+                const ok = await (window.waitForFirestore ? window.waitForFirestore(3000) : Promise.resolve(false));
+                if (ok && window.__FIRESTORE_DB__){
+                    await window.__FIRESTORE_DB__.collection('staff').add(member);
+                    staffToast('Miembro guardado en Firestore');
+                } else {
+                    const arr = JSON.parse(localStorage.getItem('dj_staff')||'[]');
+                    arr.unshift(Object.assign({ id: 'local_'+Date.now() }, member));
+                    localStorage.setItem('dj_staff', JSON.stringify(arr));
+                    staffToast('Guardado localmente');
+                }
+            }catch(err){
+                const arr = JSON.parse(localStorage.getItem('dj_staff')||'[]');
+                arr.unshift(Object.assign({ id: 'local_'+Date.now() }, member));
+                localStorage.setItem('dj_staff', JSON.stringify(arr));
+                staffToast('Guardado localmente');
+            }
+            staffForm.reset();
+            renderStaffList();
+        });
+
+        renderStaffList();
+    }
+
+    async function deleteInvoice(id){
+        // Firestore
+        try{
+            const ok = await (window.waitForFirestore ? window.waitForFirestore(3000) : Promise.resolve(false));
+            if (ok && window.__FIRESTORE_DB__){
+                await window.__FIRESTORE_DB__.collection('invoices').doc(id).delete();
+                return;
+            }
+        }catch(e){ console.warn('Firestore delete invoice failed', e); }
+        // API
+        try{
+            const base = getApiBase();
+            if (base){
+                const r = await fetch(base.replace(/\/$/, '') + '/api/invoices/' + encodeURIComponent(id), { method: 'DELETE' });
+                if (r.ok) return;
+            }
+        }catch(e){ console.warn('API delete invoice failed', e); }
+        // localStorage
+        try{
+            const arr = JSON.parse(localStorage.getItem('dj_invoices') || '[]');
+            localStorage.setItem('dj_invoices', JSON.stringify(arr.filter(x => x.id !== id)));
+        }catch(e){ console.warn('localStorage delete invoice failed', e); }
+    }
+
     function renderInvoicesManager(area){
         if (!area) return;
-        area.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><div style="font-weight:800">Facturas</div><div>Total ventas: <span id="invoices-total">${formatCOP(0)}</span></div></div><div id="invoices-list"></div><div id="invoice-detail" style="margin-top:12px"></div>`;
+        area.innerHTML = `
+            <div class="admin-card" style="padding:16px">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+                    <h3 style="margin:0">Facturas</h3>
+                    <div style="font-size:0.9rem;color:var(--muted)">Total ventas confirmadas: <strong id="invoices-total" style="color:var(--wine-700)">${formatCOP(0)}</strong></div>
+                </div>
+                <div id="invoices-list"><p style="color:var(--muted)">Cargando...</p></div>
+                <div id="invoice-detail" style="margin-top:16px"></div>
+            </div>`;
         loadInvoices().then(invoices => {
             const list = area.querySelector('#invoices-list');
-            renderInvoicesList(list, invoices || []);
+            renderInvoicesList(area, invoices || []);
             const totalEl = area.querySelector('#invoices-total');
             if (totalEl) totalEl.textContent = formatCOP(computeTotalSales(invoices || []));
         });
     }
 
-    function renderInvoicesList(container, invoices){
+    function renderInvoicesList(area, invoices){
+        const container = area.querySelector('#invoices-list');
         if (!container) return;
         container.innerHTML = '';
-        (invoices || []).forEach(inv => {
+        if (!invoices.length){
+            container.innerHTML = '<p style="color:var(--muted)">No hay facturas registradas.</p>';
+            return;
+        }
+        invoices.forEach(inv => {
+            const confirmed = inv.status === 'confirmed';
+            const total = formatCOP(inv.total || inv.subtotal || 0);
+            const date = new Date(inv.createdAt || Date.now()).toLocaleString('es-CO');
+            const badge = confirmed
+                ? `<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:700">Confirmada</span>`
+                : `<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:20px;font-size:0.75rem;font-weight:700">Pendiente</span>`;
             const div = document.createElement('div');
             div.className = 'admin-invoice-row';
-            div.style.padding = '8px';
-            div.style.borderBottom = '1px solid rgba(0,0,0,0.04)';
-            div.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>${inv.id}</strong> <small style="color:var(--muted);margin-left:6px">${new Date(inv.createdAt || Date.now()).toLocaleString()}</small><div style="color:${inv.status==='confirmed'?'green':'#666'};font-weight:700;margin-top:6px">${inv.status}</div></div><div><button class="btn btn-view-invoice" data-id="${inv.id}">Ver / Editar</button></div></div>`;
+            div.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06);gap:8px;flex-wrap:wrap';
+            div.innerHTML = `
+                <div style="flex:1;min-width:180px">
+                    <div style="font-weight:700;font-size:0.9rem">${escapeHtml(inv.id)}</div>
+                    <div style="color:var(--muted);font-size:0.8rem;margin:2px 0">${date}</div>
+                    <div style="margin-top:4px">${badge}</div>
+                </div>
+                <div style="font-weight:800;color:var(--wine-700);min-width:90px;text-align:right">${total}</div>
+                <div style="display:flex;gap:6px">
+                    <button class="btn small btn-view-invoice" data-id="${escapeHtml(inv.id)}">Ver / Editar</button>
+                    ${!confirmed ? `<button class="btn small btn-confirm-invoice-list" data-id="${escapeHtml(inv.id)}">Confirmar</button>` : ''}
+                    <button class="btn-outline small btn-delete-invoice" data-id="${escapeHtml(inv.id)}" style="color:#c0392b;border-color:#c0392b">Borrar</button>
+                </div>`;
             container.appendChild(div);
         });
-        // attach view handlers
-        Array.from(container.querySelectorAll('.btn-view-invoice')).forEach(b => b.addEventListener('click', async (e) => {
-            const id = b.dataset.id;
-            const detail = container.parentElement.querySelector('#invoice-detail');
+
+        // View / Edit
+        container.querySelectorAll('.btn-view-invoice').forEach(b => b.addEventListener('click', async () => {
+            const detail = area.querySelector('#invoice-detail');
             if (!detail) return;
-            // find invoice
+            // toggle off if already open
+            if (detail.dataset.openId === b.dataset.id){ detail.innerHTML = ''; detail.dataset.openId = ''; return; }
+            detail.innerHTML = '<p style="color:var(--muted)">Cargando factura...</p>';
             const invoices = await loadInvoices();
-            const inv = (invoices || []).find(x => x.id === id);
-            if (!inv) { detail.innerHTML = '<div>No encontrada</div>'; return; }
-            openInvoiceEditorInAdmin(detail, inv);
+            const inv = (invoices || []).find(x => x.id === b.dataset.id);
+            if (!inv){ detail.innerHTML = '<p>Factura no encontrada.</p>'; return; }
+            detail.dataset.openId = b.dataset.id;
+            openInvoiceEditorInAdmin(area, detail, inv);
+        }));
+
+        // Quick confirm from list
+        container.querySelectorAll('.btn-confirm-invoice-list').forEach(b => b.addEventListener('click', async () => {
+            if (!confirm('¿Confirmar factura y descontar stock?')) return;
+            try{
+                await confirmInvoice(b.dataset.id);
+                renderInvoicesManager(area.closest('#admin-panel-area') || area);
+            }catch(e){ alert('No se pudo confirmar: ' + (e && e.message ? e.message : String(e))); }
+        }));
+
+        // Delete
+        container.querySelectorAll('.btn-delete-invoice').forEach(b => b.addEventListener('click', async () => {
+            if (!confirm('¿Eliminar esta factura? Esta acción no se puede deshacer.')) return;
+            try{
+                await deleteInvoice(b.dataset.id);
+                renderInvoicesManager(area.closest('#admin-panel-area') || area);
+            }catch(e){ alert('Error al eliminar: ' + (e && e.message ? e.message : String(e))); }
         }));
     }
 
-    function openInvoiceEditorInAdmin(area, inv){
-        if (!area) return;
-        area.innerHTML = '';
+    function openInvoiceEditorInAdmin(area, detailArea, inv){
+        detailArea.innerHTML = '';
+        const confirmed = inv.status === 'confirmed';
         const wrap = document.createElement('div');
-        wrap.style.border = '1px solid rgba(0,0,0,0.04)';
-        wrap.style.padding = '12px';
-        wrap.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center"><div><strong>Factura ${inv.id}</strong><div style="color:var(--muted);font-size:0.9rem">${new Date(inv.createdAt||Date.now()).toLocaleString()}</div></div><div><button class="btn btn-confirm-invoice">Confirmar</button> <button class="btn btn-save-invoice">Guardar</button></div></div><div id="invoice-items" style="margin-top:12px"></div><div id="invoice-totals" style="margin-top:12px;font-weight:800">Total: ${formatCOP(inv.total || inv.subtotal || 0)}</div>`;
-        area.appendChild(wrap);
-        const itemsContainer = wrap.querySelector('#invoice-items');
-        function renderItems(){
-            itemsContainer.innerHTML = '';
-            (inv.items || []).forEach((it, idx) => {
-                const row = document.createElement('div');
-                row.style.display = 'flex';
-                row.style.justifyContent = 'space-between';
-                row.style.alignItems = 'center';
-                row.style.padding = '8px 0';
-                row.innerHTML = `<div style="flex:1"><strong>${escapeHtml(it.name)}</strong><div style="color:var(--muted);font-size:0.9rem">${formatCOP(it.unitPrice)} cada uno</div></div><div style="width:160px;display:flex;gap:8px;align-items:center"><input data-idx="${idx}" class="input-qty" type="number" min="1" value="${it.qty}" style="width:70px;padding:6px" /><input data-idx="${idx}" class="input-discount" type="number" min="0" max="100" value="${it.discountPercentage||0}" style="width:70px;padding:6px" /><button data-idx="${idx}" class="btn btn-remove-invoice-item">Eliminar</button></div>`;
-                itemsContainer.appendChild(row);
-            });
-            // attach handlers
-            Array.from(itemsContainer.querySelectorAll('.input-qty')).forEach(i => i.addEventListener('change', (e)=>{
-                const idx = Number(i.dataset.idx); inv.items[idx].qty = Math.max(1, Number(i.value)||1); recalcTotals();
-            }));
-            Array.from(itemsContainer.querySelectorAll('.input-discount')).forEach(i => i.addEventListener('change', (e)=>{
-                const idx = Number(i.dataset.idx); inv.items[idx].discountPercentage = Math.max(0, Math.min(100, Number(i.value)||0)); recalcTotals();
-            }));
-            Array.from(itemsContainer.querySelectorAll('.btn-remove-invoice-item')).forEach(b => b.addEventListener('click', (e)=>{
-                const idx = Number(b.dataset.idx); inv.items.splice(idx,1); renderItems(); recalcTotals();
-            }));
-        }
+        wrap.style.cssText = 'border:1px solid rgba(0,0,0,0.08);border-radius:10px;padding:14px;background:#fafafa;margin-top:4px';
+        wrap.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+                <div>
+                    <strong style="font-size:1rem">Factura ${escapeHtml(inv.id)}</strong>
+                    <div style="color:var(--muted);font-size:0.82rem">${new Date(inv.createdAt||Date.now()).toLocaleString('es-CO')}</div>
+                    ${inv.clientName ? `<div style="font-size:0.85rem;margin-top:2px">Cliente: <strong>${escapeHtml(inv.clientName)}</strong></div>` : ''}
+                </div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                    ${!confirmed ? `<button class="btn small btn-confirm-invoice">✓ Confirmar</button>` : ''}
+                    <button class="btn small btn-save-invoice">Guardar</button>
+                    <button class="btn-outline small btn-close-editor">✕ Cerrar</button>
+                </div>
+            </div>
+            <div id="invoice-items-editor" style="margin-bottom:12px"></div>
+            <div style="display:flex;justify-content:flex-end;align-items:center;gap:12px;border-top:1px solid rgba(0,0,0,0.06);padding-top:10px">
+                <span style="color:var(--muted);font-size:0.85rem">Total:</span>
+                <strong id="invoice-totals" style="font-size:1.1rem;color:var(--wine-700)">${formatCOP(inv.total || inv.subtotal || 0)}</strong>
+            </div>`;
+        detailArea.appendChild(wrap);
+
+        const itemsContainer = wrap.querySelector('#invoice-items-editor');
+
         function recalcTotals(){
             inv.subtotal = (inv.items || []).reduce((s,it) => s + ((Number(it.unitPrice)||0) * (Number(it.qty)||1)), 0);
             inv.total = (inv.items || []).reduce((s,it) => {
                 const p = Math.round((Number(it.unitPrice)||0) * (100 - (Number(it.discountPercentage)||0))/100);
                 return s + (p * (Number(it.qty)||1));
             }, 0);
-            wrap.querySelector('#invoice-totals').textContent = 'Total: ' + formatCOP(inv.total || inv.subtotal || 0);
+            const el = wrap.querySelector('#invoice-totals');
+            if (el) el.textContent = formatCOP(inv.total || inv.subtotal || 0);
         }
-        // Save handler
+
+        function renderItems(){
+            itemsContainer.innerHTML = '';
+            if (!inv.items || !inv.items.length){
+                itemsContainer.innerHTML = '<p style="color:var(--muted);font-size:0.85rem">Sin productos.</p>';
+                return;
+            }
+            (inv.items || []).forEach((it, idx) => {
+                const lineTotal = Math.round((Number(it.unitPrice)||0) * (100-(Number(it.discountPercentage)||0))/100) * (Number(it.qty)||1);
+                const row = document.createElement('div');
+                row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(0,0,0,0.04);gap:8px;flex-wrap:wrap';
+                row.innerHTML = `
+                    <div style="flex:1;min-width:120px">
+                        <strong style="font-size:0.9rem">${escapeHtml(it.name||it.title||'')}</strong>
+                        <div style="color:var(--muted);font-size:0.8rem">${formatCOP(it.unitPrice||it.price||0)} c/u</div>
+                    </div>
+                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+                        <label style="font-size:0.78rem;color:var(--muted)">Cant.
+                            <input data-idx="${idx}" class="input-qty" type="number" min="1" value="${it.qty||1}" style="width:54px;padding:4px;border-radius:6px;border:1px solid var(--line);margin-left:4px">
+                        </label>
+                        <label style="font-size:0.78rem;color:var(--muted)">Desc.%
+                            <input data-idx="${idx}" class="input-discount" type="number" min="0" max="100" value="${it.discountPercentage||0}" style="width:54px;padding:4px;border-radius:6px;border:1px solid var(--line);margin-left:4px">
+                        </label>
+                        <span style="font-weight:700;font-size:0.88rem;min-width:80px;text-align:right" class="line-total-${idx}">${formatCOP(lineTotal)}</span>
+                        <button data-idx="${idx}" class="btn-outline small btn-remove-item" style="padding:3px 8px;font-size:0.75rem;color:#c0392b;border-color:#c0392b">✕</button>
+                    </div>`;
+                itemsContainer.appendChild(row);
+            });
+
+            itemsContainer.querySelectorAll('.input-qty').forEach(i => i.addEventListener('input', () => {
+                const idx = Number(i.dataset.idx);
+                inv.items[idx].qty = Math.max(1, Number(i.value)||1);
+                recalcTotals();
+                const lt = wrap.querySelector('.line-total-'+idx);
+                if (lt){ const p = Math.round((Number(inv.items[idx].unitPrice)||0)*(100-(Number(inv.items[idx].discountPercentage)||0))/100); lt.textContent = formatCOP(p * inv.items[idx].qty); }
+            }));
+            itemsContainer.querySelectorAll('.input-discount').forEach(i => i.addEventListener('input', () => {
+                const idx = Number(i.dataset.idx);
+                inv.items[idx].discountPercentage = Math.max(0, Math.min(100, Number(i.value)||0));
+                recalcTotals();
+                const lt = wrap.querySelector('.line-total-'+idx);
+                if (lt){ const p = Math.round((Number(inv.items[idx].unitPrice)||0)*(100-(Number(inv.items[idx].discountPercentage)||0))/100); lt.textContent = formatCOP(p * (inv.items[idx].qty||1)); }
+            }));
+            itemsContainer.querySelectorAll('.btn-remove-item').forEach(b => b.addEventListener('click', () => {
+                inv.items.splice(Number(b.dataset.idx), 1);
+                renderItems(); recalcTotals();
+            }));
+        }
+
+        // Save
         wrap.querySelector('.btn-save-invoice').addEventListener('click', async () => {
-            try{ await persistInvoice(inv); alert('Factura guardada.'); renderInvoicesManager(document.getElementById('admin-invoices-area')); }catch(e){ alert('Error guardando factura.'); console.warn(e); }
-        });
-        // Confirm handler
-        wrap.querySelector('.btn-confirm-invoice').addEventListener('click', async () => {
-            if (!confirm('Confirmar factura y descontar stock? esta acción actualizará inventario.')) return;
             try{
-                await confirmInvoice(inv.id);
-                renderInvoicesManager(document.getElementById('admin-invoices-area'));
-            }catch(e){ console.warn('Confirm invoice failed', e); alert('No se pudo confirmar la factura: ' + (e && e.message ? e.message : String(e))); }
+                await persistInvoice(inv);
+                const toast = document.createElement('div');
+                toast.textContent = 'Factura guardada.';
+                toast.className = 'toast show';
+                document.body.appendChild(toast);
+                setTimeout(()=>{ toast.remove(); }, 1400);
+                renderInvoicesManager(area.closest('#admin-panel-area') || area);
+            }catch(e){ alert('Error guardando factura.'); console.warn(e); }
         });
 
-        renderItems(); recalcTotals();
+        // Confirm
+        const confirmBtn = wrap.querySelector('.btn-confirm-invoice');
+        if (confirmBtn) confirmBtn.addEventListener('click', async () => {
+            if (!confirm('¿Confirmar factura y descontar stock? Esta acción actualizará el inventario.')) return;
+            try{
+                await confirmInvoice(inv.id);
+                renderInvoicesManager(area.closest('#admin-panel-area') || area);
+            }catch(e){ alert('No se pudo confirmar: ' + (e && e.message ? e.message : String(e))); }
+        });
+
+        // Close
+        wrap.querySelector('.btn-close-editor').addEventListener('click', () => {
+            detailArea.innerHTML = '';
+            detailArea.dataset.openId = '';
+        });
+
+        renderItems();
+        recalcTotals();
     }
 
     async function confirmInvoice(id){
@@ -1215,49 +1716,99 @@ document.addEventListener('DOMContentLoaded', () => {
                 try{ connectPromoSlidesToProducts(); }catch(e){}
     })();
 
-    // Admin: abrir el gestor de Ofertas desde el panel (botón en admin.html)
+    // Admin: abrir gestores desde el panel (botones en admin.html/index.html)
     try{
         const path = window.location.pathname.split('/').pop();
         if (path === 'admin.html' || window.location.pathname.indexOf('/admin') !== -1){
-            const btn = document.getElementById('admin-offers-btn');
-            const area = document.getElementById('admin-offers-area');
-            if (btn && area){
-                btn.addEventListener('click', (e) => {
+            const offersBtn = document.getElementById('admin-offers-btn');
+            const invBtn = document.getElementById('admin-invoices-btn');
+            const productsBtn = document.getElementById('admin-products-btn');
+            const enviosBtn = document.getElementById('admin-envios-btn');
+            const staffBtn = document.getElementById('admin-staff-btn');
+            const adminPanel = document.getElementById('admin-panel-area');
+            const actionBtns = Array.from(document.querySelectorAll('.admin-action-btn')) || [];
+
+            function setAdminActive(selected){
+                actionBtns.forEach(b => {
+                    b.classList.remove('active');
+                    b.classList.remove('primary');
+                    b.classList.add('ghost');
+                });
+                if (selected && selected.classList) {
+                    selected.classList.remove('ghost');
+                    selected.classList.add('active');
+                }
+            }
+            function clearAdminPanel(){ if (adminPanel) adminPanel.innerHTML = ''; }
+
+            // Productos
+            if (productsBtn){
+                productsBtn.addEventListener('click', (e) => {
                     e.preventDefault();
-                    // Ensure admin authentication (demo): if not authed, prompt now
+                    setAdminActive(productsBtn);
+                    clearAdminPanel();
+                    renderAdminProductsPanel(adminPanel);
+                    try{ adminPanel.scrollIntoView({ behavior: 'smooth' }); }catch(e){}
+                });
+            }
+
+            // Ofertas -> render inside unified adminPanel
+            if (offersBtn && adminPanel){
+                offersBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
                     if (!sessionStorage.getItem('admin_authed')){
                         const pass = prompt('Contraseña de administrador (demo):');
-                        if (pass !== 'admin123'){
-                            alert('Acceso denegado. Ingresa la contraseña en el panel.');
-                            return;
-                        }
+                        if (pass !== 'admin123'){ alert('Acceso denegado. Ingresa la contraseña en el panel.'); return; }
                         sessionStorage.setItem('admin_authed','1');
                     }
                     adminOffersActive = true;
-                    // create controls + grid for offers management
-                    area.innerHTML = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><input id="product-search-input" class="search-box" placeholder="Buscar productos..." style="flex:1" /><button id="categories-btn" class="btn-outline">Categorias</button><div id="active-filter-label" style="margin-left:8px;color:var(--muted)"></div></div><div class="grid-container"></div>`;
+                    setAdminActive(offersBtn);
+                    clearAdminPanel();
+                    adminPanel.innerHTML = `<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px"><input id="product-search-input" class="search-box" placeholder="Buscar productos..." style="flex:1" /><button id="categories-btn" class="btn-outline">Categorias</button><div id="active-filter-label" style="margin-left:8px;color:var(--muted)"></div></div><div class="grid-container"></div>`;
                     attachSearchCategoriesHandlers && attachSearchCategoriesHandlers();
                     createCategoryFilterUI();
                     renderProducts();
-                    area.scrollIntoView({ behavior: 'smooth' });
+                    adminPanel.scrollIntoView({ behavior: 'smooth' });
                 });
             }
-                // invoices manager
-                const invBtn = document.getElementById('admin-invoices-btn');
-                const invArea = document.getElementById('admin-invoices-area');
-                if (invBtn && invArea){
-                    invBtn.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        if (!sessionStorage.getItem('admin_authed')){
-                            const pass = prompt('Contraseña de administrador (demo):');
-                            if (pass !== 'admin123'){ alert('Acceso denegado. Ingresa la contraseña en el panel.'); return; }
-                            sessionStorage.setItem('admin_authed','1');
-                        }
-                        adminOffersActive = false;
-                        renderInvoicesManager(invArea);
-                        invArea.scrollIntoView({ behavior: 'smooth' });
-                    });
-                }
+
+            // Facturas -> render inside unified adminPanel
+            if (invBtn && adminPanel){
+                invBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (!sessionStorage.getItem('admin_authed')){
+                        const pass = prompt('Contraseña de administrador (demo):');
+                        if (pass !== 'admin123'){ alert('Acceso denegado. Ingresa la contraseña en el panel.'); return; }
+                        sessionStorage.setItem('admin_authed','1');
+                    }
+                    adminOffersActive = false;
+                    setAdminActive(invBtn);
+                    clearAdminPanel();
+                    renderInvoicesManager(adminPanel);
+                    adminPanel.scrollIntoView({ behavior: 'smooth' });
+                });
+            }
+
+            // Envíos -> simple info (section removed from public site)
+            if (enviosBtn && adminPanel){
+                enviosBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    setAdminActive(enviosBtn);
+                    clearAdminPanel();
+                    if (adminPanel) adminPanel.innerHTML = '<div class="admin-card"><h3>Envíos</h3><p>La sección de envíos fue removida del sitio público. Aquí puedes ver registros o configuraciones si aplica.</p></div>';
+                });
+            }
+
+            // Staff
+            if (staffBtn && adminPanel){
+                staffBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    setAdminActive(staffBtn);
+                    clearAdminPanel();
+                    renderAdminStaffPanel(adminPanel);
+                    try{ adminPanel.scrollIntoView({ behavior: 'smooth' }); }catch(e){}
+                });
+            }
         }
     }catch(e){ /* ignore admin UI attach errors */ }
 

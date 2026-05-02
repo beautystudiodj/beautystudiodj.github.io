@@ -980,6 +980,27 @@ ul.clean-list li::before {
 .admin-action-btn:hover { transform: translateY(-2px); }
 .admin-action-btn.primary { background: var(--wine-700); color: #fff; box-shadow: var(--shadow-m); }
 .admin-action-btn.ghost  { background: #fff; border: 1.5px solid var(--line); color: var(--wine-700); }
+.admin-action-btn.active, .admin-action-btn.active.ghost { background: var(--wine-700) !important; color: #fff !important; box-shadow: var(--shadow-m); transform: none; border-color: transparent; }
+
+/* Invoice manager */
+.admin-invoice-row:last-child { border-bottom: none !important; }
+.btn.small { padding: 5px 12px; font-size: 0.78rem; border-radius: 8px; }
+.btn-outline.small { padding: 5px 12px; font-size: 0.78rem; border-radius: 8px; background: transparent; }
+
+/* Offer editor (inline admin) */
+.offer-editor {
+    margin-top: 10px;
+    width: 100%;
+}
+.offer-editor .offer-range { 
+    width: 100%; 
+    accent-color: var(--wine-700);
+}
+.offer-editor .btn.small, .offer-editor .btn-outline.small {
+    padding: 6px 10px;
+    font-size: 0.78rem;
+    border-radius: 8px;
+}
 .product-row { display: flex; gap: 12px; align-items: center; padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--line); background: #fff; }
 .product-row.dirty { background: #fff8ee; border-color: #ffd29a; }
 .product-thumb { width: 76px; height: 58px; object-fit: cover; border-radius: 7px; }

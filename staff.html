@@ -6,17 +6,37 @@
     <title>Staff - D&J Beauty Studio</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="icon" href="https://i.imgur.com/vscZKK3.png" type="image/png">
+    <style>
+        /* Staff page specific styles */
+        :root{--wine-700:#810319;--muted:#666}
+        .staff-hero{padding:40px 0;background:linear-gradient(135deg,var(--wine-700),#a20e3b);color:#fff}
+        .staff-hero .hero-grid{display:flex;gap:20px;align-items:center;justify-content:space-between}
+        .staff-hero .hero-panel{background:rgba(255,255,255,0.08);padding:18px;border-radius:10px}
+        .controls{display:flex;gap:10px;justify-content:center;margin-top:18px;flex-wrap:wrap}
+        .search{padding:8px 12px;border-radius:8px;border:1px solid rgba(0,0,0,0.06);min-width:220px}
+        .role-filter{padding:8px 12px;border-radius:8px;border:1px solid rgba(0,0,0,0.06)}
+        .staff-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:22px}
+        .staff-card{background:#fff;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.06);overflow:hidden;display:flex;flex-direction:column}
+        .staff-img{width:100%;height:220px;object-fit:cover;background:#f5f5f5}
+        .staff-body{padding:14px;display:flex;flex-direction:column;gap:8px}
+        .staff-name{font-weight:800;margin:0}
+        .staff-role{color:var(--wine-700);font-weight:700;font-size:0.95rem}
+        .staff-bio{color:var(--muted);font-size:0.95rem;line-height:1.4}
+        .staff-actions{display:flex;gap:8px;margin-top:auto}
+        .staff-social a{margin-right:8px;color:var(--wine-700);text-decoration:none}
+        @media(max-width:560px){.staff-img{height:180px}.staff-hero{padding:28px 0}}
+    </style>
 </head>
 <body>
 
-    <div class="promo-bar">Asesoria personalizada para que compres justo lo que te favorece</div>
+    <div class="promo-bar">Asesoría personalizada para que compres justo lo que te favorece</div>
 
     <header>
         <div class="logo-container">
             <img src="https://i.imgur.com/vscZKK3.png" alt="Logo D&J Beauty Studio">
             <div class="brand-copy">
                 <h3>D&J Beauty Studio</h3>
-                <p>Un equipo femenino que te guia para comprar con seguridad.</p>
+                <p>Un equipo que te acompaña en cada compra.</p>
             </div>
         </div>
         <button id="user-panel-btn" class="user-panel-btn" aria-label="Acceso panel" title="Panel">
@@ -32,85 +52,59 @@
         <a href="index.html">Inicio</a>
         <a href="productos.html">Productos</a>
         <a href="ofertas.html">Ofertas</a>
-        <a href="envios.html">Envíos Nacionales</a>
         <a href="staff.html">Staff</a>
     </nav>
 
     <div class="container">
-        <section class="hero fade-up">
+        <section class="hero fade-up staff-hero">
             <div class="hero-grid">
                 <div>
-                    <p class="eyebrow">Beauty Advisors</p>
-                    <h1>No vendemos por vender, te asesoramos de verdad.</h1>
-                    <p>Conoce al staff que te ayuda a elegir tonos, texturas y rutinas segun tu estilo de vida.</p>
+                    <p class="eyebrow">Nuestro Equipo</p>
+                    <h1>Profesionales detrás de cada recomendación</h1>
+                    <p>Conoce a las personas que prueban, crean y asesoran los productos D&amp;J Beauty Studio.</p>
                     <div class="button-row">
-                        <a href="productos.html" class="btn">Comprar Con Asesoria</a>
-                        <a href="envios.html" class="btn-outline">Ver Tiempos De Entrega</a>
+                        <a href="productos.html" class="btn">Conocer Productos</a>
                     </div>
                 </div>
                 <div class="hero-panel">
-                    <h3 style="color: #fff;">Respuesta rapida por WhatsApp</h3>
-                    <p>Te ayudamos a seleccionar productos en menos de 10 minutos.</p>
-                    <a href="#" class="btn-secondary">Solicitar Recomendacion</a>
+                    <h3 style="color:#fff;margin:0 0 6px">¿Necesitas ayuda personal?</h3>
+                    <p style="color:#fff;margin:0 0 12px">Reserva una asesoría por WhatsApp y te conectamos con la especialista indicada.</p>
+                    <a href="https://wa.me/573227098891?text=Hola%2C%20quiero%20una%20asesoria%20de%20compra" class="btn" target="_blank" rel="noopener noreferrer">Reservar ahora</a>
                 </div>
             </div>
         </section>
 
         <section class="fade-up delay-1">
-            <h2>Nuestro Equipo De Expertas</h2>
-            <p class="section-copy">Especialistas en maquillaje, cuidado capilar y experiencia de compra personalizada.</p>
-            <div class="grid-container">
-            <div class="card">
-                <img src="https://placehold.co/300x250/810319/ffffff?text=Danna" class="card-img-top" alt="Danna Gutiérrez">
-                <div class="card-body">
-                    <span class="staff-badge">CEO</span>
-                    <h3>Danna Gutiérrez</h3>
-                    <p>Creadora oficial de la marca.</p>
-                    <p class="quote">"La belleza auténtica nace de la confianza y el cuidado."</p>
-                    <a class="btn btn-contact" href="https://wa.me/573227098891?text=Hola%20Danna%20quiero%20agendar%20una%20cita" data-number="573227098891" target="_blank" rel="noopener noreferrer" aria-label="Contacto directo con Danna">
-                        <span style="display:inline-flex;align-items:center;gap:8px;">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                                <path d="M20.5 3.5C18.5 1.5 15.9 0.5 13.3 0.8 8.8 1.3 5 4.9 4.3 9.4 3.6 13.8 6.1 18 10.2 19.5L11 20c.2.1.5.2.8.1.8-.2 3.1-.9 5.1-2.5 1.8-1.4 3.2-3.5 3.6-6 .6-3.6-0.1-6.9-0.7-7.6z" fill="#25D366" />
-                                <path d="M17.4 14.8c-.3.9-1.6 1.8-2.2 1.9-.6.1-1.2.1-2-.1-1.9-.4-3.8-1.9-5.1-3.6-1.3-1.6-2.1-3.6-1.8-4.8.3-1.2 1.4-1.8 2.1-2 .6-.2 1.2-.2 1.7-.1.5.1.9.2 1.2.2.3 0 .5-.1.7-.3.4-.3.7-.6 1-1 0 0 .7-.8 1.3-.4.6.4 1.9 1.3 2.1 1.5.2.2.3.5.3.8 0 .4-.1.8-.3 1.1-.2.3-.5.7-.5.9 0 .2.1.5.4.8.3.4.9 1.2 1.1 1.8.3.6.2 1-.1 1.6z" fill="#fff" />
-                            </svg>
-                            <span>Contactar por WhatsApp</span>
-                            <span class="sr-only">3227098891</span>
-                        </span>
-                    </a>
-                </div>
+            <h2>Conoce a nuestro equipo</h2>
+            <p class="section-copy">Especialistas en maquillaje, cuidado facial, uñas, fotografía y atención al cliente. Filtra por rol o busca por nombre.</p>
+
+            <div class="controls" role="region" aria-label="Controles de búsqueda y filtro">
+                <input id="staff-search-input" class="search" placeholder="Buscar por nombre, rol o especialidad" aria-label="Buscar staff">
+                <select id="staff-role-filter" class="role-filter" aria-label="Filtrar por rol">
+                    <option value="">Mostrar todos</option>
+                    <option value="Asesora">Asesora</option>
+                    <option value="Maquillaje">Maquillaje</option>
+                    <option value="Uñas">Uñas</option>
+                    <option value="Fotografía">Fotografía</option>
+                    <option value="Atención">Atención al Cliente</option>
+                    <option value="Administración">Administración</option>
+                </select>
             </div>
-        </div>
+
+            <div id="staff-grid" class="staff-grid" aria-live="polite"></div>
         </section>
 
         <section class="newsletter fade-up delay-2">
-            <h2>Asesoria Gratuita De Primera Compra</h2>
-            <p class="section-copy">Cuéntanos lo que quieres lograr y te sugerimos el kit ideal para tu tipo de piel y estilo.</p>
-            <div class="button-row" style="justify-content: center;">
-                <a href="productos.html" class="btn">Ver Productos Recomendados</a>
-            </div>
-        </section>
-
-        <section class="offer-banner fade-up delay-3">
-            <h2>Preguntas Sobre Asesoria</h2>
-            <div class="faq">
-                <details>
-                    <summary>La asesoria tiene costo?</summary>
-                    <p>No, la primera asesoria de compra es totalmente gratuita.</p>
-                </details>
-                <details>
-                    <summary>Me recomiendan productos para piel sensible?</summary>
-                    <p>Si, evaluamos tu caso y te proponemos opciones suaves y efectivas.</p>
-                </details>
-                <details>
-                    <summary>Puedo pedir recomendaciones para evento especial?</summary>
-                    <p>Claro. Te guiamos con look completo para boda, fiesta o sesion de fotos.</p>
-                </details>
+            <h2>¿Quieres conocer a alguien en particular?</h2>
+            <p class="section-copy">Escríbenos y te conectamos con el miembro del equipo indicado para tu caso.</p>
+            <div class="button-row" style="justify-content:center;">
+                <a href="https://wa.me/573227098891?text=Hola%2C%20quiero%20contactar%20con%20el%20equipo" class="btn" target="_blank" rel="noopener noreferrer">Contactar al equipo</a>
             </div>
         </section>
     </div>
 
     <footer>
-        <p>&copy; 2026 D&J Beauty Studio.</p>
+        <p>&copy; 2026 D&amp;J Beauty Studio.</p>
         <p>Tu equipo beauty de confianza en cada compra.</p>
     </footer>
 
@@ -120,12 +114,77 @@
         <a class="social-link tiktok" href="https://www.tiktok.com/@19beautystudiodj" target="_blank" rel="noopener noreferrer" aria-label="TikTok 19beautystudiodj">
             <img src="https://i.imgur.com/4QYSxp8.png" alt="TikTok 19beautystudiodj">
         </a>
-        <a class="social-link instagram" href="https://www.instagram.com/19beautystudio_dj/" target="_blank" rel="noopener noreferrer" aria-label="Instagram 19beautudio_dj">
+        <a class="social-link instagram" href="https://www.instagram.com/19beautudio_dj/" target="_blank" rel="noopener noreferrer" aria-label="Instagram 19beautudio_dj">
             <img src="https://i.imgur.com/ihD6vQe.png" alt="Instagram 19beautudio_dj">
         </a>
     </div>
 
     <script src="firebase-config.js"></script>
+    <script>
+        // Dynamic staff loader: carga desde Firestore collection 'staff'
+        let STAFF_DATA = [];
+        function debounce(fn, wait = 200){ let t; return (...a)=>{ clearTimeout(t); t = setTimeout(()=>fn.apply(this,a), wait); }; }
+
+        function createStaffCard(member){
+            const card = document.createElement('article');
+            card.className = 'staff-card card';
+            const img = document.createElement('img'); img.className = 'staff-img card-img-top'; img.src = member.image || 'https://placehold.co/600x400/ddd/000?text=Sin+imagen'; img.alt = member.name || 'Miembro del equipo';
+            const body = document.createElement('div'); body.className = 'staff-body card-body';
+            const role = document.createElement('div'); role.className = 'staff-role'; role.textContent = member.role || '';
+            const name = document.createElement('h3'); name.className = 'staff-name'; name.textContent = member.name || '';
+            const bio = document.createElement('p'); bio.className = 'staff-bio'; bio.textContent = member.bio || '';
+            body.appendChild(role); body.appendChild(name); body.appendChild(bio);
+            card.appendChild(img); card.appendChild(body);
+            return card;
+        }
+
+        function renderStaffGrid(list){
+            const grid = document.getElementById('staff-grid'); if (!grid) return;
+            grid.innerHTML = '';
+            if (!list || list.length === 0){ grid.innerHTML = '<p style="color:var(--muted)">No hay miembros del equipo por ahora. Agrega uno desde el panel administrador.</p>'; return; }
+            list.forEach(m => grid.appendChild(createStaffCard(m)));
+        }
+
+        function applyFilters(){
+            const q = (document.getElementById('staff-search-input').value || '').trim().toLowerCase();
+            const role = (document.getElementById('staff-role-filter').value || '').trim().toLowerCase();
+            const out = (STAFF_DATA || []).filter(s => {
+                if (role && role !== '' && ((s.role || '').toLowerCase().indexOf(role) === -1)) return false;
+                if (!q) return true;
+                const hay = ((s.name||'') + ' ' + (s.role||'') + ' ' + (s.bio||'')).toLowerCase();
+                return hay.indexOf(q) !== -1;
+            });
+            renderStaffGrid(out);
+        }
+
+        // Subscribe to Firestore 'staff' collection when available; fallback to localStorage
+        document.addEventListener('DOMContentLoaded', async ()=>{
+            const search = document.getElementById('staff-search-input');
+            const role = document.getElementById('staff-role-filter');
+            if (search) search.addEventListener('input', debounce(applyFilters, 180));
+            if (role) role.addEventListener('change', applyFilters);
+
+            try{
+                const ok = await window.waitForFirestore();
+                if (ok && window.__FIRESTORE_DB__) {
+                    const db = window.__FIRESTORE_DB__;
+                    db.collection('staff').orderBy('name').onSnapshot(snapshot => {
+                        STAFF_DATA = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                        applyFilters();
+                    }, err => {
+                        console.warn('Firestore staff snapshot error', err);
+                        // fallback to localStorage
+                        try{ STAFF_DATA = JSON.parse(localStorage.getItem('dj_staff') || '[]'); applyFilters(); }catch(e){ STAFF_DATA = []; applyFilters(); }
+                    });
+                    return;
+                }
+            }catch(e){ console.warn('waitForFirestore failed', e); }
+
+            // Fallback: load from localStorage (if any)
+            try{ STAFF_DATA = JSON.parse(localStorage.getItem('dj_staff') || '[]'); }catch(e){ STAFF_DATA = []; }
+            applyFilters();
+        });
+    </script>
     <script src="script.js"></script>
 </body>
 </html>

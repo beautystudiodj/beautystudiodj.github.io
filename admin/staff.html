@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestionar Staff - Panel Admin</title>
+    <link rel="stylesheet" href="../styles.css">
+    <link rel="icon" href="https://i.imgur.com/vscZKK3.png" type="image/png">
+</head>
+<body>
+
+    <div class="promo-bar">Panel Administrador — Staff</div>
+
+    <header>
+        <div class="logo-container">
+            <img src="https://i.imgur.com/vscZKK3.png" alt="Logo D&J Beauty Studio">
+            <div class="brand-copy">
+                <h3>Panel Administrador</h3>
+                <p>Gestionar miembros del staff</p>
+            </div>
+        </div>
+    </header>
+
+    <nav>
+        <a href="../index.html">Inicio</a>
+        <a href="../productos.html">Productos</a>
+        <a href="../ofertas.html">Ofertas</a>
+        <a href="../staff.html">Staff</a>
+        <a href="index.html">Panel</a>
+    </nav>
+
+    <div class="container">
+        <div class="admin-card">
+            <h1>Agregar Miembro del Staff</h1>
+            <p class="section-copy">Los miembros se guardarán en Firestore y aparecerán automáticamente en la página pública de Staff.</p>
+            <p id="db-status" style="font-weight:700">⏳ Conectando a Firestore...</p>
+
+            <form id="staff-form" class="admin-form" style="margin-top:12px;max-width:700px">
+                <label>Nombre completo
+                    <input name="name" required placeholder="Ej: Ana María López">
+                </label>
+                <label>Rol / Cargo
+                    <input name="role" placeholder="Ej: Asesora, Maquillaje, Uñas">
+                </label>
+                <label>Breve bio
+                    <textarea name="bio" rows="3" placeholder="Especialidad y experiencia"></textarea>
+                </label>
+                <label>Imagen (URL)
+                    <input name="image" placeholder="https://...">
+                </label>
+                <label>WhatsApp (código+numero)
+                    <input name="whatsapp" placeholder="573227098891">
+                </label>
+                <label>Instagram (usuario)
+                    <input name="instagram" placeholder="usuario_instagram">
+                </label>
+                <label>Email
+                    <input name="email" placeholder="correo@dominio.com">
+                </label>
+
+                <div class="button-row" style="margin-top:12px">
+                    <button type="submit" class="btn">Agregar Staff</button>
+                    <a class="btn-outline" href="index.html">Cancelar</a>
+                </div>
+            </form>
+
+            <div id="staff-list" style="margin-top:18px"></div>
+        </div>
+    </div>
+
+    <footer>
+        <p>&copy; 2026 D&J Beauty Studio. Panel demo.</p>
+    </footer>
+
+    <script src="../firebase-config.js"></script>
+    <script>
+        // Control de acceso demo
+        (function(){ if (!sessionStorage.getItem('admin_authed')){ var pass = prompt('Contraseña de administrador (demo):'); if (pass !== 'admin123'){ alert('Acceso denegado.'); window.location.href = '../index.html'; } else { sessionStorage.setItem('admin_authed','1'); } } })();
+
+        const statusEl = document.getElementById('db-status');
+        const staffForm = document.getElementById('staff-form');
+        const staffList = document.getElementById('staff-list');
+
+        async function refreshStaffList(){
+            try{
+                const ok = await window.waitForFirestore();
+                if (ok && window.__FIRESTORE_DB__) {
+                    const snapshot = await window.__FIRESTORE_DB__.collection('staff').orderBy('name').get();
+                    const arr = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+                    renderLocalStaffList(arr);
+                    return;
+                }
+            }catch(e){ console.warn('Firestore read failed', e); }
+            // fallback localStorage
+            try{ const arr = JSON.parse(localStorage.getItem('dj_staff') || '[]'); renderLocalStaffList(arr); }catch(e){ renderLocalStaffList([]); }
+        }
+
+        function renderLocalStaffList(arr){
+            staffList.innerHTML = '<h3>Miembros guardados</h3>';
+            if (!arr || arr.length === 0){ staffList.innerHTML += '<p style="color:var(--muted)">No hay miembros añadidos aún.</p>'; return; }
+            const ul = document.createElement('div'); ul.style.display = 'grid'; ul.style.gap = '8px';
+            arr.forEach(m => {
+                const d = document.createElement('div'); d.style.padding = '8px'; d.style.border = '1px solid rgba(0,0,0,0.06)'; d.style.borderRadius = '8px'; d.innerHTML = `<strong>${m.name}</strong> — <span style="color:var(--muted)">${m.role||''}</span>`;
+                ul.appendChild(d);
+            });
+            staffList.appendChild(ul);
+        }
+
+        window.initAdminStaff = async function(){
+            const ok = await window.waitForFirestore();
+            if (ok && window.__FIRESTORE_DB__){ statusEl.textContent = '🟢 Conectado a Firestore'; statusEl.style.color = 'green'; }
+            else { statusEl.textContent = '🔴 Firestore no disponible — se usará localStorage'; statusEl.style.color = '#c0392b'; }
+            await refreshStaffList();
+        };
+
+        // Auto-init when page is loaded directly
+        if (document.readyState === 'loading'){
+            document.addEventListener('DOMContentLoaded', () => { try{ window.initAdminStaff(); }catch(e){ console.error(e); } });
+        } else {
+            try{ window.initAdminStaff(); }catch(e){}
+        }
+
+        staffForm.addEventListener('submit', async function(e){
+            e.preventDefault();
+            const f = staffForm;
+            const member = {
+                name: (f.name.value||'').trim(), role: (f.role.value||'').trim(), bio: (f.bio.value||'').trim(),
+                image: (f.image.value||'').trim(), whatsapp: (f.whatsapp.value||'').trim(), instagram: (f.instagram.value||'').trim(), email: (f.email.value||'').trim()
+            };
+            if (!member.name){ alert('El nombre es obligatorio'); return; }
+
+            // Intentar guardar en Firestore
+            try{
+                const ok = await window.waitForFirestore();
+                if (ok && window.__FIRESTORE_DB__){
+                    const ref = await window.__FIRESTORE_DB__.collection('staff').add(member);
+                    alert('Miembro agregado en Firestore');
+                    f.reset();
+                    await refreshStaffList();
+                    return;
+                }
+            }catch(err){ console.warn('Firestore save failed', err); }
+
+            // Fallback: guardar en localStorage
+            try{
+                const arr = JSON.parse(localStorage.getItem('dj_staff') || '[]');
+                arr.unshift(Object.assign({ id: 'local_' + Date.now() }, member));
+                localStorage.setItem('dj_staff', JSON.stringify(arr));
+                alert('Miembro guardado localmente (Firestore no disponible)');
+                f.reset();
+                await refreshStaffList();
+            }catch(e){ alert('No se pudo guardar el miembro.'); console.error(e); }
+        });
+    </script>
+</body>
+</html>

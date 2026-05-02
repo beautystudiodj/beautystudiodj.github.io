@@ -26,7 +26,6 @@
         <a href="../index.html">Inicio</a>
         <a href="../productos.html">Productos</a>
         <a href="../ofertas.html">Ofertas</a>
-        <a href="../envios.html">Envíos Nacionales</a>
         <a href="../staff.html">Staff</a>
     </nav>
 
@@ -328,7 +327,8 @@
             showToast('No fue posible actualizar el producto', 1600);
         }
 
-        document.addEventListener('DOMContentLoaded', async ()=>{
+        // Expose an initializer so this fragment can be loaded inline into the admin panel
+        window.initAdminProducts = async function(){
             // Prefer Firestore (if configured), then API, then repo db.json
             try{
                 const fbOk = await (window.waitForFirestore ? window.waitForFirestore(4000) : Promise.resolve(false));
@@ -372,7 +372,14 @@
                 commitBtn.addEventListener('click', commitStockChanges);
                 updateCommitButtonState();
             }
-        });
+        };
+
+        // Auto-init when page is loaded directly
+        if (document.readyState === 'loading'){
+            document.addEventListener('DOMContentLoaded', () => { try{ window.initAdminProducts(); }catch(e){ console.error(e); } });
+        } else {
+            try{ window.initAdminProducts(); }catch(e){}
+        }
     </script>
 </body>
 </html>
