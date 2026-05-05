@@ -2299,29 +2299,34 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Tu carrito está vacío.');
             return;
         }
-        // create invoice and persist (Firestore -> API -> localStorage)
-        const invoice = createInvoiceFromCart();
-        let saved = null;
-        try{
-            saved = await persistInvoice(invoice);
-            try{ alert('Factura generada: ' + (saved.id || invoice.id)); }catch(e){}
-        }catch(e){ console.warn('No se pudo guardar la factura:', e); saved = invoice; }
+            // create invoice object immediately (contains a provisional id)
+            const invoice = createInvoiceFromCart();
 
-        // clear cart after generating invoice
-        cart = [];
-        saveCart();
-        updateCartDisplay();
+            // Build message synchronously so navigation originates from the user click
+            const immediateLines = (invoice.items || []).map(it => {
+                const qty = Number(it.qty) || 1;
+                const unit = formatCOP(it.unitPrice || it.price || 0);
+                const subtotal = formatCOP((Number(it.unitPrice || it.price) || 0) * qty);
+                return qty > 1 ? `- ${it.name} x${qty} (${unit}) — ${subtotal}` : `- ${it.name} (${unit})`;
+            });
+            const immediateTotal = formatCOP(invoice.total || invoice.subtotal || 0 || cartTotal());
+            const immediateMsg = `Hola D&J Beauty Studio 🌸\n\nYa tengo mi carrito listo y quiero generar mi factura para concretar la compra.\n\n🧾 Factura: ${invoice.id}\n📦 Productos:\n${immediateLines.join('\n')}\n\n💰 Total: ${immediateTotal}\n\n¿Podemos coordinar el pago y el envío? ¡Gracias! 💖`;
+            const wa = `https://wa.me/573227098891?text=${encodeURIComponent(immediateMsg)}`;
 
-        const lines = (saved.items || []).map(it => {
-            const qty = Number(it.qty) || 1;
-            const unit = formatCOP(it.unitPrice || it.price || 0);
-            const subtotal = formatCOP((Number(it.unitPrice || it.price) || 0) * qty);
-            return qty > 1 ? `- ${it.name} x${qty} (${unit}) — ${subtotal}` : `- ${it.name} (${unit})`;
-        });
-        const total = formatCOP(saved.total || saved.subtotal || 0 || cartTotal());
-        const plainMsg = `Hola D&J Beauty Studio 🌸\n\nYa tengo mi carrito listo y quiero generar mi factura para concretar la compra.\n\n🧾 Factura: ${saved.id || invoice.id}\n📦 Productos:\n${lines.join('\n')}\n\n💰 Total: ${total}\n\n¿Podemos coordinar el pago y el envío? ¡Gracias! 💖`;
-        const wa = `https://wa.me/573227098891?text=${encodeURIComponent(plainMsg)}`;
-        window.open(wa, '_blank');
+            // Open WhatsApp immediately (avoids losing user gesture on mobile)
+            try{ window.open(wa, '_blank'); }catch(e){ /* ignore popup block fallback handled below */ }
+
+            // Then persist invoice (still await saving to keep behavior similar)
+            let saved = null;
+            try{
+                saved = await persistInvoice(invoice);
+                try{ alert('Factura generada: ' + (saved.id || invoice.id)); }catch(e){}
+            }catch(e){ console.warn('No se pudo guardar la factura:', e); saved = invoice; }
+
+            // clear cart after generating invoice
+            cart = [];
+            saveCart();
+            updateCartDisplay();
     });
 
     // 4. Funcionalidad Botón Contacto / Staff
