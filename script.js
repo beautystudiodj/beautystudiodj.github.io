@@ -2873,14 +2873,40 @@ function initUserPanelUI(){
         }
         updateUserBtnIcon();
 
-        // Listen for auth state changes
+        // Auth ready promise: resolves when Firebase Auth has settled the session
+        window.__AUTH_READY__ = new Promise(function(resolve){
+            window.__AUTH_READY_RESOLVE_ = resolve;
+        });
+
+        // Check auth state early (without waiting for Firestore)
         (async function watchAuth(){
             try{
                 const ok = await (window.waitForFirestore ? window.waitForFirestore(5000) : Promise.resolve(false));
                 if (ok && window.__FIRESTORE_AUTH__){
-                    window.__FIRESTORE_AUTH__.onAuthStateChanged(() => updateUserBtnIcon());
+                    window.__FIRESTORE_AUTH__.onAuthStateChanged(function(){
+                        updateUserBtnIcon();
+                        if (window.__AUTH_READY_RESOLVE_) {
+                            window.__AUTH_READY_RESOLVE_();
+                            window.__AUTH_READY_RESOLVE_ = null;
+                        }
+                    });
+                    // If user is already set, resolve immediately
+                    if (window.__FIRESTORE_AUTH__.currentUser && window.__AUTH_READY_RESOLVE_) {
+                        window.__AUTH_READY_RESOLVE_();
+                        window.__AUTH_READY_RESOLVE_ = null;
+                    }
+                } else {
+                    if (window.__AUTH_READY_RESOLVE_) {
+                        window.__AUTH_READY_RESOLVE_();
+                        window.__AUTH_READY_RESOLVE_ = null;
+                    }
                 }
-            }catch(e){}
+            }catch(e){
+                if (window.__AUTH_READY_RESOLVE_) {
+                    window.__AUTH_READY_RESOLVE_();
+                    window.__AUTH_READY_RESOLVE_ = null;
+                }
+            }
         })();
 
         if (document.querySelector('.user-modal')) return; // already initialized
@@ -2914,62 +2940,53 @@ function initUserPanelUI(){
         async function renderUserModal(){
             const content = modal.querySelector('#user-modal-content');
 
-            const auth = window.__FIRESTORE_AUTH__;
-            const currentUser = auth ? auth.currentUser : null;
-            if (currentUser){
-                _renderSignedIn(content, currentUser);
-                return;
-            }
-
+            // Wait for auth + Firestore to settle (up to 6s total)
             content.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);font-size:0.9rem">Cargando...</div>';
 
             try{
-                const ok = await Promise.race([
-                    (window.waitForFirestore ? window.waitForFirestore(4000) : Promise.resolve(false)),
-                    new Promise(r => setTimeout(() => r(false), 3000))
+                await Promise.race([
+                    Promise.all([
+                        (window.waitForFirestore ? window.waitForFirestore(6000) : Promise.resolve(false)),
+                        (window.__AUTH_READY__ || Promise.resolve())
+                    ]),
+                    new Promise(function(r){ setTimeout(r, 5500); })
                 ]);
 
                 const auth2 = window.__FIRESTORE_AUTH__;
                 const db = window.__FIRESTORE_DB__;
+                const user = auth2 ? auth2.currentUser : null;
 
-                if (!ok || !auth2 || !db){
+                if (!auth2 || !db){
                     content.innerHTML = `
                         <div style="text-align:center;padding:6px 0">
                             <div style="font-size:2.2rem;margin-bottom:8px">🔐</div>
                             <h3 style="margin:0 0 4px">Mi Cuenta</h3>
                             <p style="color:var(--muted);font-size:0.88rem;margin-bottom:4px">El servicio está tardando en conectar.</p>
                             <p style="color:var(--muted);font-size:0.78rem;margin-bottom:16px">Posiblemente hay una sesión pendiente. Intenta reiniciar.</p>
-                            <button id="retry-auth-btn" class="btn google-btn" style="background:var(--wine-700);margin-bottom:8px">Reintentar</button>
                             <button id="clear-auth-btn" class="btn-outline" style="width:100%;padding:10px;font-size:0.82rem">Limpiar sesión pendiente</button>
                             <div id="retry-auth-msg" style="margin-top:8px;font-size:0.82rem;color:var(--muted)"></div>
                         </div>`;
-                    const retryBtn = content.querySelector('#retry-auth-btn');
                     const clearBtn = content.querySelector('#clear-auth-btn');
                     const msg = content.querySelector('#retry-auth-msg');
-                    retryBtn.addEventListener('click', () => { renderUserModal(); });
-                    clearBtn.addEventListener('click', async () => {
+                    clearBtn.addEventListener('click', async function(){
+                        msg.textContent = 'Limpiando...';
+                        if (auth2) try{ await auth2.signOut(); }catch(e){}
                         try{
-                            msg.textContent = 'Limpiando...';
-                            if (auth2) await auth2.signOut();
+                            var k = Object.keys(localStorage).find(function(x){ return x.indexOf('firebase:auth') !== -1; });
+                            if (k) localStorage.removeItem(k);
                         }catch(e){}
-                        try{
-                            const key = Object.keys(localStorage).find(k => k.includes('firebase:auth'));
-                            if (key) localStorage.removeItem(key);
-                        }catch(e){}
-                        msg.textContent = 'Listo. Vuelve a intentar.';
-                        setTimeout(() => renderUserModal(), 800);
+                        msg.textContent = 'Listo. Recarga la página.';
                     });
                     return;
                 }
 
-                const user = auth2.currentUser;
                 if (!user){
                     _renderSignIn(content, auth2);
                 } else {
                     _renderSignedIn(content, user);
                 }
             }catch(e){
-                content.innerHTML = `<div style="text-align:center;padding:16px;color:#c0392b">Error: ${escapeHtml(e.message || '')}</div>`;
+                content.innerHTML = '<div style="text-align:center;padding:16px;color:#c0392b">Error</div>';
             }
         }
 

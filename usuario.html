@@ -536,13 +536,16 @@
         (async function initPage(){
             mostrarCargando();
             try {
-                var ok = await Promise.race([
-                    (window.waitForFirestore?window.waitForFirestore(5000):Promise.resolve(false)),
-                    new Promise(function(r){setTimeout(function(){r(false);},4000);})
+                await Promise.race([
+                    Promise.all([
+                        (window.waitForFirestore?window.waitForFirestore(6000):Promise.resolve(false)),
+                        (window.__AUTH_READY__||Promise.resolve())
+                    ]),
+                    new Promise(function(r){setTimeout(r,5500);})
                 ]);
                 var auth = window.__FIRESTORE_AUTH__;
                 var db = window.__FIRESTORE_DB__;
-                if (!ok || !auth || !db) { mostrarError('El servicio no está disponible. Verifica tu conexión e intenta de nuevo.'); return; }
+                if (!auth || !db) { mostrarError('El servicio no está disponible. Verifica tu conexión e intenta de nuevo.'); return; }
                 var user = auth.currentUser;
                 if (!user) { mostrarLogin(); return; }
                 var invoices = [];
