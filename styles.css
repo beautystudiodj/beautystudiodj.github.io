@@ -702,20 +702,23 @@ ul.clean-list li::before {
     position: fixed;
     right: 18px; bottom: 18px;
     z-index: 1500;
-    background: var(--wine-700);
+    background: #25D366;
     color: #fff;
     text-decoration: none;
-    border-radius: 8px;
-    padding: 11px 18px;
-    font-size: .78rem;
+    border-radius: 50px;
+    padding: 12px 22px;
+    font-size: .82rem;
     font-weight: 700;
     font-family: 'Montserrat', sans-serif;
-    letter-spacing: .06em;
-    text-transform: uppercase;
-    box-shadow: 0 8px 22px rgba(79,0,18,.32);
+    letter-spacing: .04em;
+    box-shadow: 0 8px 24px rgba(37,211,102,.35);
     transition: transform .2s, box-shadow .2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
 }
-.floating-whatsapp:hover { transform: translateY(-2px); box-shadow: 0 14px 28px rgba(79,0,18,.38); }
+.floating-whatsapp:hover { transform: translateY(-3px) scale(1.04); box-shadow: 0 14px 32px rgba(37,211,102,.45); }
+.floating-whatsapp svg { width: 20px; height: 20px; flex-shrink: 0; }
 
 .floating-cart {
     position: fixed;
@@ -829,36 +832,208 @@ ul.clean-list li::before {
     z-index: 3000;
     opacity: 0;
     pointer-events: none;
-    transition: opacity .18s ease;
+    transition: opacity .25s ease;
 }
 .admin-modal.show { opacity: 1; pointer-events: auto; }
-.admin-modal .modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.45); }
+.admin-modal.show .modal-card { transform: scale(1) translateY(0); opacity: 1; }
+.admin-modal.show .modal-backdrop { opacity: 1; }
+.admin-modal .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: opacity .25s ease;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
 .admin-modal .modal-card {
     position: relative;
-    background: #fff;
-    border-radius: 12px;
-    padding: 18px;
-    width: min(480px, 94%);
-    box-shadow: var(--shadow-l);
-    border: 1px solid var(--line);
+    background: linear-gradient(180deg, #fff, #fefafb);
+    border-radius: 16px;
+    padding: 28px 24px 22px;
+    width: min(420px, 92%);
+    box-shadow: 0 25px 60px rgba(79,0,18,.25);
+    border: 1px solid var(--blush-200);
     z-index: 3;
+    transform: scale(0.92) translateY(12px);
+    opacity: 0;
+    transition: transform .28s cubic-bezier(.34,1.56,.64,1), opacity .22s ease;
 }
-.admin-modal h3 { margin: 0 0 6px; font-size: 1.05rem; color: var(--wine-700); }
+.admin-modal h3 {
+    margin: 0 0 4px;
+    font-size: 1.15rem;
+    color: var(--wine-700);
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 800;
+    letter-spacing: -.02em;
+}
 .admin-modal .admin-input {
     width: 100%;
-    padding: 10px 12px;
-    border-radius: 8px;
-    border: 1px solid var(--line);
-    margin-top: 8px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1.5px solid var(--line);
+    margin-top: 10px;
     font-size: .95rem;
+    font-family: 'Lato', sans-serif;
+    transition: border-color .2s, box-shadow .2s;
+    background: #fff;
 }
-.admin-modal .error { color: #a00; font-size: .92rem; margin-top: 8px; display:none; }
-.admin-modal .modal-actions { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; }
-.admin-modal .admin-modal-close { position: absolute; right: 10px; top: 8px; background: transparent; border: none; font-size: 1.2rem; cursor: pointer; color: var(--muted); }
+.admin-modal .admin-input:focus {
+    outline: none;
+    border-color: var(--wine-700);
+    box-shadow: 0 0 0 4px rgba(129,3,25,.08);
+}
+.admin-modal .admin-input:focus::placeholder { color: transparent; }
+.admin-modal .error {
+    color: #c0392b;
+    font-size: .85rem;
+    margin-top: 10px;
+    display: none;
+    font-weight: 600;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #fef0f0;
+    border: 1px solid #f5c6cb;
+}
+.admin-modal .modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 18px;
+    justify-content: flex-end;
+}
+.admin-modal .modal-actions .btn { flex: 1; padding: 12px; border-radius: 10px; }
+.admin-modal .modal-actions .btn-outline { flex: 1; padding: 12px; border-radius: 10px; }
+.admin-modal .admin-modal-close {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    width: 32px;
+    height: 32px;
+    background: var(--blush-100);
+    border: none;
+    border-radius: 50%;
+    font-size: 1rem;
+    cursor: pointer;
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background .18s, transform .18s;
+}
+.admin-modal .admin-modal-close:hover { background: var(--blush-200); transform: rotate(90deg); }
+
+/* ── User modal (customer panel) ────────────────────────── */
+.user-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease;
+}
+.user-modal.show { opacity: 1; pointer-events: auto; }
+.user-modal.show .modal-card { transform: scale(1) translateY(0); opacity: 1; }
+.user-modal.show .modal-backdrop { opacity: 1; }
+.user-modal .modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    opacity: 0;
+    transition: opacity .25s ease;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+.user-modal .modal-card {
+    position: relative;
+    background: linear-gradient(180deg, #fff, #fefafb);
+    border-radius: 16px;
+    padding: 28px 24px 22px;
+    width: min(400px, 92%);
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 25px 60px rgba(79,0,18,.25);
+    border: 1px solid var(--blush-200);
+    z-index: 3;
+    transform: scale(0.92) translateY(12px);
+    opacity: 0;
+    transition: transform .28s cubic-bezier(.34,1.56,.64,1), opacity .22s ease;
+}
+.user-modal .modal-close {
+    position: absolute;
+    right: 12px;
+    top: 12px;
+    width: 32px;
+    height: 32px;
+    background: var(--blush-100);
+    border: none;
+    border-radius: 50%;
+    font-size: 1rem;
+    cursor: pointer;
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background .18s, transform .18s;
+    z-index: 5;
+}
+.user-modal .modal-close:hover { background: var(--blush-200); transform: rotate(90deg); }
+.user-modal .admin-input {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1.5px solid var(--line);
+    font-size: .95rem;
+    font-family: 'Lato', sans-serif;
+    transition: border-color .2s, box-shadow .2s;
+    background: #fff;
+}
+.user-modal .admin-input:focus {
+    outline: none;
+    border-color: var(--wine-700);
+    box-shadow: 0 0 0 4px rgba(129,3,25,.08);
+}
+.user-modal .error {
+    color: #c0392b;
+    font-size: .85rem;
+    display: none;
+    font-weight: 600;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #fef0f0;
+    border: 1px solid #f5c6cb;
+}
+.user-modal .google-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 14px 18px;
+    border: none;
+    border-radius: 12px;
+    background: #4285f4;
+    color: #fff;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: .88rem;
+    cursor: pointer;
+    transition: background .2s, transform .2s, box-shadow .2s;
+    box-shadow: 0 4px 14px rgba(66,133,244,.3);
+}
+.user-modal .google-btn:hover {
+    background: #3367d6;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(66,133,244,.4);
+}
+.user-modal .google-btn:active { transform: translateY(0); }
+.user-modal hr { border: none; border-top: 1px solid var(--line); margin: 12px 0; }
 
 @media (max-width: 520px) {
     .user-panel-btn { top: 10px; right: 10px; width: 40px; height: 40px; }
-    .admin-modal .modal-card { padding: 14px; }
+    .admin-modal .modal-card { padding: 20px 16px; }
+    .user-modal .modal-card { padding: 20px 16px; }
 }
 
 /* Coupon popup (first-visit) - shaped like a coupon */
@@ -1084,7 +1259,7 @@ footer p { margin: 5px 0; }
 @media (max-width: 560px) {
     nav { justify-content: flex-start; overflow-x: auto; flex-wrap: nowrap; padding: 7px 10px; }
     nav a { white-space: nowrap; font-size: .69rem; padding: 7px 11px; }
-    .floating-whatsapp { right: 10px; left: 10px; bottom: 10px; text-align: center; font-size: .74rem; }
+    .floating-whatsapp { right: 10px; left: 10px; bottom: 10px; text-align: center; font-size: .74rem; justify-content: center; }
     .button-row { flex-direction: column; }
     .btn, .btn-secondary, .btn-outline { width: 100%; }
     .hero-metrics { grid-template-columns: repeat(3,1fr); gap: 6px; }

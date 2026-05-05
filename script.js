@@ -1011,7 +1011,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 0);
         // final total subtracting coupon (coupon is global after item discounts)
         const total = Math.max(0, totalAfterItemDiscounts - couponDiscount);
-        return { id, createdAt: Date.now(), status: 'pending', items, subtotal, coupon: coupon ? { code: coupon.code, discountPercent: coupon.discountPercent, amount: couponDiscount, expiresAt: coupon.expiresAt } : null, total };
+        const auth = window.__FIRESTORE_AUTH__;
+        const uid = (auth && auth.currentUser) ? auth.currentUser.uid : null;
+        return { id, createdAt: Date.now(), status: 'pending', uid, items, subtotal, coupon: coupon ? { code: coupon.code, discountPercent: coupon.discountPercent, amount: couponDiscount, expiresAt: coupon.expiresAt } : null, total };
     }
 
     async function persistInvoice(inv){
@@ -1595,6 +1597,246 @@ document.addEventListener('DOMContentLoaded', () => {
         recalcTotals();
     }
 
+    // ─── Sales / Ventas Dashboard ─────────────────────────────────────────────
+    async function renderAdminSalesPanel(area){
+        if (!area) return;
+        area.innerHTML = `
+            <div class="admin-card" style="padding:18px">
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:18px">
+                    <h3 style="margin:0">📊 Dashboard de Ventas</h3>
+                    <button id="ventas-refresh" class="btn-outline small">↺ Actualizar</button>
+                </div>
+                <div id="ventas-loading" style="color:var(--muted);padding:24px 0;text-align:center">Cargando datos...</div>
+                <div id="ventas-content" style="display:none">
+                    <!-- KPI row -->
+                    <div id="ventas-kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:22px"></div>
+                    <!-- Period selector -->
+                    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+                        <span style="font-size:0.85rem;color:var(--muted);font-weight:600">Período:</span>
+                        <button class="period-btn btn-outline small" data-period="7" style="font-size:0.78rem">7 días</button>
+                        <button class="period-btn btn-outline small active" data-period="30" style="font-size:0.78rem">30 días</button>
+                        <button class="period-btn btn-outline small" data-period="90" style="font-size:0.78rem">90 días</button>
+                        <button class="period-btn btn-outline small" data-period="365" style="font-size:0.78rem">12 meses</button>
+                    </div>
+                    <!-- Charts row -->
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+                        <div style="background:#fafafa;border:1px solid rgba(0,0,0,0.07);border-radius:12px;padding:14px">
+                            <div style="font-weight:700;font-size:0.88rem;margin-bottom:10px;color:var(--ink)">Ventas diarias (COP)</div>
+                            <canvas id="chart-daily" height="160"></canvas>
+                        </div>
+                        <div style="background:#fafafa;border:1px solid rgba(0,0,0,0.07);border-radius:12px;padding:14px">
+                            <div style="font-weight:700;font-size:0.88rem;margin-bottom:10px;color:var(--ink)">Estado de facturas</div>
+                            <canvas id="chart-status" height="160"></canvas>
+                        </div>
+                    </div>
+                    <!-- Top products -->
+                    <div style="background:#fafafa;border:1px solid rgba(0,0,0,0.07);border-radius:12px;padding:14px;margin-bottom:20px">
+                        <div style="font-weight:700;font-size:0.88rem;margin-bottom:10px;color:var(--ink)">🏆 Productos más vendidos (unidades)</div>
+                        <canvas id="chart-products" height="120"></canvas>
+                    </div>
+                    <!-- Recent confirmed invoices -->
+                    <div style="background:#fafafa;border:1px solid rgba(0,0,0,0.07);border-radius:12px;padding:14px">
+                        <div style="font-weight:700;font-size:0.88rem;margin-bottom:10px;color:var(--ink)">🧾 Últimas ventas confirmadas</div>
+                        <div id="ventas-recent"></div>
+                    </div>
+                </div>
+            </div>`;
+
+        let activePeriod = 30;
+        let allInvoices = [];
+
+        // Period button handlers
+        area.querySelectorAll('.period-btn').forEach(b => b.addEventListener('click', () => {
+            area.querySelectorAll('.period-btn').forEach(x => x.classList.remove('active'));
+            b.classList.add('active');
+            activePeriod = Number(b.dataset.period);
+            drawCharts(allInvoices, activePeriod);
+        }));
+
+        area.querySelector('#ventas-refresh').addEventListener('click', () => loadAndRender());
+
+        async function loadAndRender(){
+            const loadingEl = area.querySelector('#ventas-loading');
+            const contentEl = area.querySelector('#ventas-content');
+            if (loadingEl) loadingEl.style.display = 'block';
+            if (contentEl) contentEl.style.display = 'none';
+            allInvoices = await loadInvoices();
+            if (loadingEl) loadingEl.style.display = 'none';
+            if (contentEl) contentEl.style.display = 'block';
+            renderKPIs(allInvoices);
+            drawCharts(allInvoices, activePeriod);
+            renderRecentSales(allInvoices);
+        }
+
+        function renderKPIs(invoices){
+            const confirmed = invoices.filter(i => i.status === 'confirmed');
+            const pending   = invoices.filter(i => i.status !== 'confirmed');
+            const totalRevenue = confirmed.reduce((s,i) => s + (Number(i.total) || Number(i.subtotal) || 0), 0);
+            const avgTicket = confirmed.length ? Math.round(totalRevenue / confirmed.length) : 0;
+            // units sold
+            const unitsSold = confirmed.reduce((s,i) => s + (i.items||[]).reduce((a,it) => a + (Number(it.qty)||1), 0), 0);
+            // today revenue
+            const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+            const todayRev = confirmed.filter(i => (i.confirmedAt||i.createdAt||0) >= todayStart.getTime())
+                                      .reduce((s,i) => s + (Number(i.total)||Number(i.subtotal)||0), 0);
+
+            const kpis = [
+                { label: 'Total Ventas', value: formatCOP(totalRevenue), icon: '💰', color: '#d4edda', text: '#155724' },
+                { label: 'Facturas Confirmadas', value: confirmed.length, icon: '✅', color: '#d4edda', text: '#155724' },
+                { label: 'Facturas Pendientes', value: pending.length, icon: '⏳', color: '#fff3cd', text: '#856404' },
+                { label: 'Ticket Promedio', value: formatCOP(avgTicket), icon: '🎟', color: '#cce5ff', text: '#004085' },
+                { label: 'Unidades Vendidas', value: unitsSold, icon: '📦', color: '#e2d9f3', text: '#5a2d91' },
+                { label: 'Ventas Hoy', value: formatCOP(todayRev), icon: '📅', color: '#f8d7da', text: '#721c24' },
+            ];
+
+            const kpiArea = area.querySelector('#ventas-kpis');
+            kpiArea.innerHTML = kpis.map(k => `
+                <div style="background:${k.color};border-radius:12px;padding:14px 12px;text-align:center">
+                    <div style="font-size:1.5rem;margin-bottom:4px">${k.icon}</div>
+                    <div style="font-size:1.1rem;font-weight:800;color:${k.text}">${k.value}</div>
+                    <div style="font-size:0.76rem;color:${k.text};opacity:0.85;margin-top:2px">${k.label}</div>
+                </div>`).join('');
+        }
+
+        async function drawCharts(invoices, periodDays){
+            // Load Chart.js dynamically
+            if (!window.Chart){
+                await new Promise((resolve, reject) => {
+                    const s = document.createElement('script');
+                    s.src = 'https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js';
+                    s.onload = resolve; s.onerror = reject;
+                    document.head.appendChild(s);
+                });
+            }
+            const Chart = window.Chart;
+
+            const now = Date.now();
+            const cutoff = now - periodDays * 86400000;
+            const confirmed = invoices.filter(i => i.status === 'confirmed' && (i.confirmedAt || i.createdAt || 0) >= cutoff);
+
+            // ── Daily chart ──
+            const dayMap = {};
+            const fmt = d => {
+                const dt = new Date(d);
+                return periodDays <= 30 ? dt.toLocaleDateString('es-CO',{day:'2-digit',month:'short'})
+                                        : dt.toLocaleDateString('es-CO',{month:'short',year:'2-digit'});
+            };
+            // generate labels
+            const labels = [];
+            for (let d = periodDays - 1; d >= 0; d--){
+                const dt = new Date(now - d * 86400000);
+                const key = periodDays <= 90 ? dt.toDateString() : (dt.getFullYear() + '-' + dt.getMonth());
+                if (!dayMap[key]) { dayMap[key] = 0; labels.push({ key, label: fmt(dt.getTime()) }); }
+            }
+            confirmed.forEach(inv => {
+                const ts = inv.confirmedAt || inv.createdAt || 0;
+                const dt = new Date(ts);
+                const key = periodDays <= 90 ? dt.toDateString() : (dt.getFullYear() + '-' + dt.getMonth());
+                if (dayMap[key] !== undefined) dayMap[key] += Number(inv.total || inv.subtotal || 0);
+            });
+
+            const dailyCanvas = area.querySelector('#chart-daily');
+            if (dailyCanvas._chartInst) dailyCanvas._chartInst.destroy();
+            dailyCanvas._chartInst = new Chart(dailyCanvas, {
+                type: 'bar',
+                data: {
+                    labels: labels.map(l => l.label),
+                    datasets: [{ label: 'Ventas COP', data: labels.map(l => dayMap[l.key] || 0),
+                        backgroundColor: 'rgba(120,40,80,0.18)', borderColor: 'rgba(120,40,80,0.8)',
+                        borderWidth: 1.5, borderRadius: 4 }]
+                },
+                options: { responsive: true, plugins: { legend: { display: false } },
+                    scales: { y: { ticks: { callback: v => '$' + (v/1000).toFixed(0) + 'k' }, grid: { color: 'rgba(0,0,0,0.04)' } },
+                              x: { ticks: { font: { size: 10 } }, grid: { display: false } } } }
+            });
+
+            // ── Status pie chart ──
+            const nConfirmed = invoices.filter(i => i.status === 'confirmed').length;
+            const nPending   = invoices.filter(i => i.status === 'pending').length;
+            const nOther     = invoices.length - nConfirmed - nPending;
+            const statusCanvas = area.querySelector('#chart-status');
+            if (statusCanvas._chartInst) statusCanvas._chartInst.destroy();
+            statusCanvas._chartInst = new Chart(statusCanvas, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Confirmadas', 'Pendientes', 'Otras'],
+                    datasets: [{ data: [nConfirmed, nPending, nOther],
+                        backgroundColor: ['rgba(21,87,36,0.8)', 'rgba(133,100,4,0.8)', 'rgba(90,90,90,0.6)'],
+                        borderWidth: 2, borderColor: '#fff' }]
+                },
+                options: { responsive: true, cutout: '60%',
+                    plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
+            });
+
+            // ── Top products bar chart ──
+            const prodMap = {};
+            confirmed.forEach(inv => {
+                (inv.items || []).forEach(it => {
+                    const name = it.name || it.title || '—';
+                    prodMap[name] = (prodMap[name] || 0) + (Number(it.qty) || 1);
+                });
+            });
+            const sorted = Object.entries(prodMap).sort((a,b) => b[1]-a[1]).slice(0, 8);
+            const prodCanvas = area.querySelector('#chart-products');
+            if (prodCanvas._chartInst) prodCanvas._chartInst.destroy();
+            if (sorted.length){
+                prodCanvas._chartInst = new Chart(prodCanvas, {
+                    type: 'bar',
+                    data: {
+                        labels: sorted.map(([n]) => n.length > 22 ? n.slice(0,22)+'…' : n),
+                        datasets: [{ label: 'Unidades', data: sorted.map(([,v]) => v),
+                            backgroundColor: sorted.map((_,i) => `hsla(${300 - i*25},55%,45%,0.75)`),
+                            borderRadius: 4, borderWidth: 0 }]
+                    },
+                    options: { indexAxis: 'y', responsive: true,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { ticks: { stepSize: 1 }, grid: { color: 'rgba(0,0,0,0.04)' } },
+                                  y: { ticks: { font: { size: 11 } }, grid: { display: false } } } }
+                });
+            } else {
+                prodCanvas.style.display = 'none';
+                prodCanvas.insertAdjacentHTML('afterend','<p style="color:var(--muted);font-size:0.85rem">Sin ventas en el período.</p>');
+            }
+        }
+
+        function renderRecentSales(invoices){
+            const confirmed = invoices.filter(i => i.status === 'confirmed')
+                                      .sort((a,b) => (b.confirmedAt||b.createdAt||0) - (a.confirmedAt||a.createdAt||0))
+                                      .slice(0, 10);
+            const el = area.querySelector('#ventas-recent');
+            if (!el) return;
+            if (!confirmed.length){
+                el.innerHTML = '<p style="color:var(--muted);font-size:0.85rem">No hay ventas confirmadas aún.</p>';
+                return;
+            }
+            el.innerHTML = `
+                <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+                    <thead>
+                        <tr style="border-bottom:2px solid rgba(0,0,0,0.08);color:var(--muted)">
+                            <th style="text-align:left;padding:6px 4px;font-weight:600">Factura</th>
+                            <th style="text-align:left;padding:6px 4px;font-weight:600">Fecha</th>
+                            <th style="text-align:left;padding:6px 4px;font-weight:600">Productos</th>
+                            <th style="text-align:right;padding:6px 4px;font-weight:600">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${confirmed.map(inv => {
+                            const date = new Date(inv.confirmedAt||inv.createdAt||Date.now()).toLocaleString('es-CO',{day:'2-digit',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+                            const items = (inv.items||[]).map(it => `${escapeHtml(it.name||'')} ×${it.qty||1}`).join(', ');
+                            return `<tr style="border-bottom:1px solid rgba(0,0,0,0.04)">
+                                <td style="padding:7px 4px;font-weight:600;color:var(--wine-700)">${escapeHtml(inv.id||'')}</td>
+                                <td style="padding:7px 4px;color:var(--muted)">${date}</td>
+                                <td style="padding:7px 4px;color:var(--ink);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(items)}</td>
+                                <td style="padding:7px 4px;text-align:right;font-weight:700;color:var(--wine-700)">${formatCOP(inv.total||inv.subtotal||0)}</td>
+                            </tr>`;
+                        }).join('')}
+                    </tbody>
+                </table>`;
+        }
+
+        loadAndRender();
+    }
+
     async function confirmInvoice(id){
         const errors = [];
         // Try API confirmation (server will handle stock update)
@@ -1624,6 +1866,46 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         }catch(e){ errors.push('API unexpected error: ' + (e && e.message ? e.message : String(e))); }
+
+        // Firestore: confirm invoice and decrement product stock
+        try{
+            const ok = await (window.waitForFirestore ? window.waitForFirestore(3000) : Promise.resolve(false));
+            if (ok && window.__FIRESTORE_DB__){
+                const db = window.__FIRESTORE_DB__;
+                const invDoc = await db.collection('invoices').doc(id).get();
+                if (invDoc.exists){
+                    const inv = { id: invDoc.id, ...invDoc.data() };
+                    if (inv.status === 'confirmed') throw new Error('Esta factura ya fue confirmada.');
+                    // Read current stock for each item first
+                    const stockUpdates = [];
+                    for (const it of (inv.items || [])){
+                        if (!it.id || !(Number(it.qty) > 0)) continue;
+                        try{
+                            const prodDoc = await db.collection('products').doc(it.id).get();
+                            if (prodDoc.exists){
+                                const currentStock = Number(prodDoc.data().stock || 0);
+                                stockUpdates.push({ ref: prodDoc.ref, newStock: Math.max(0, currentStock - Number(it.qty)) });
+                            }
+                        }catch(prodErr){ console.warn('Could not read product stock for', it.id, prodErr); }
+                    }
+                    // Write all changes in a batch
+                    const batch = db.batch();
+                    stockUpdates.forEach(u => batch.update(u.ref, { stock: u.newStock }));
+                    batch.update(db.collection('invoices').doc(id), { status: 'confirmed', confirmedAt: Date.now() });
+                    await batch.commit();
+                    // Sync DJ_PRODUCTS_DATA in memory
+                    stockUpdates.forEach(u => {
+                        const pidx = (DJ_PRODUCTS_DATA || []).findIndex(p => p.id === u.ref.id);
+                        if (pidx !== -1) DJ_PRODUCTS_DATA[pidx].stock = u.newStock;
+                    });
+                    renderProducts(); renderAllProducts(); renderBestSellersWidget();
+                    alert('Factura confirmada. Stocks actualizados.');
+                    return { status: 'confirmed', id };
+                } else {
+                    errors.push('Firestore: factura no encontrada');
+                }
+            }
+        }catch(e){ errors.push('Firestore error: ' + (e && e.message ? e.message : String(e))); }
 
         // Fallback: localStorage adjustments
         try{
@@ -1723,7 +2005,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const offersBtn = document.getElementById('admin-offers-btn');
             const invBtn = document.getElementById('admin-invoices-btn');
             const productsBtn = document.getElementById('admin-products-btn');
-            const enviosBtn = document.getElementById('admin-envios-btn');
+            const ventasBtn = document.getElementById('admin-ventas-btn');
             const staffBtn = document.getElementById('admin-staff-btn');
             const adminPanel = document.getElementById('admin-panel-area');
             const actionBtns = Array.from(document.querySelectorAll('.admin-action-btn')) || [];
@@ -1789,13 +2071,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-            // Envíos -> simple info (section removed from public site)
-            if (enviosBtn && adminPanel){
-                enviosBtn.addEventListener('click', (e) => {
+            // Ventas → dashboard de facturación
+            if (ventasBtn && adminPanel){
+                ventasBtn.addEventListener('click', (e) => {
                     e.preventDefault();
-                    setAdminActive(enviosBtn);
+                    setAdminActive(ventasBtn);
                     clearAdminPanel();
-                    if (adminPanel) adminPanel.innerHTML = '<div class="admin-card"><h3>Envíos</h3><p>La sección de envíos fue removida del sitio público. Aquí puedes ver registros o configuraciones si aplica.</p></div>';
+                    renderAdminSalesPanel(adminPanel);
+                    try{ adminPanel.scrollIntoView({ behavior: 'smooth' }); }catch(e){}
                 });
             }
 
@@ -2034,7 +2317,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return qty > 1 ? `- ${it.name} x${qty} (${unit}) — ${subtotal}` : `- ${it.name} (${unit})`;
         });
         const total = formatCOP(saved.total || saved.subtotal || 0 || cartTotal());
-        const plainMsg = `Hola quiero comprar (Factura: ${saved.id || invoice.id}):\n${lines.join('\n')}\nTotal: ${total}`;
+        const plainMsg = `Hola D&J Beauty Studio 🌸\n\nYa tengo mi carrito listo y quiero generar mi factura para concretar la compra.\n\n🧾 Factura: ${saved.id || invoice.id}\n📦 Productos:\n${lines.join('\n')}\n\n💰 Total: ${total}\n\n¿Podemos coordinar el pago y el envío? ¡Gracias! 💖`;
         const wa = `https://wa.me/573227098891?text=${encodeURIComponent(plainMsg)}`;
         window.open(wa, '_blank');
     });
@@ -2561,7 +2844,7 @@ function initGlobalPromoBar(){
 // Initialize global promo bar on load
 try{ initGlobalPromoBar(); }catch(e){ /* ignore */ }
 
-// User panel UI: fixed icon + access modal (demo auth)
+// User panel: Google Sign-In + customer dashboard + admin gate
 function initUserPanelUI(){
     try{
         let btn = document.getElementById('user-panel-btn') || document.querySelector('.user-panel-btn');
@@ -2569,57 +2852,239 @@ function initUserPanelUI(){
             btn = document.createElement('button');
             btn.id = 'user-panel-btn';
             btn.className = 'user-panel-btn';
-            btn.setAttribute('aria-label','Acceso panel');
-            btn.title = 'Panel';
-            btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-3-3.87"></path><path d="M4 21v-2a4 4 0 0 1 3-3.87"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
+            btn.setAttribute('aria-label','Mi cuenta');
+            btn.title = 'Mi cuenta';
             document.body.appendChild(btn);
         }
 
-        if (document.querySelector('.admin-modal')){
-            // already initialized
-        } else {
-            const modal = document.createElement('div');
-            modal.className = 'admin-modal';
-            modal.setAttribute('role','dialog');
-            modal.setAttribute('aria-modal','true');
-            modal.setAttribute('aria-hidden','true');
-            modal.innerHTML = `
-                <div class="modal-backdrop"></div>
-                <div class="modal-card">
-                    <button class="admin-modal-close" aria-label="Cerrar">✕</button>
-                    <h3>Acceso al Panel</h3>
-                    <p style="color:var(--muted);margin-top:6px">Ingresa la contraseña de administrador (demo).</p>
-                    <form id="admin-login-form">
-                        <input name="username" placeholder="Usuario (opcional)" class="admin-input" />
-                        <input name="password" type="password" placeholder="Contraseña" class="admin-input" />
-                        <div class="error" aria-live="polite"></div>
-                        <div class="modal-actions"><button type="submit" class="btn">Ingresar</button><button type="button" class="btn-outline admin-modal-cancel">Cancelar</button></div>
-                    </form>
-                </div>`;
-            document.body.appendChild(modal);
+        function updateUserBtnIcon(){
+            const auth = window.__FIRESTORE_AUTH__;
+            const u = auth ? auth.currentUser : null;
+            if (u && u.photoURL){
+                btn.innerHTML = `<img src="${escapeHtml(u.photoURL)}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover" />`;
+                btn.style.border = '2px solid #25D366';
+            } else {
+                btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-3-3.87"></path><path d="M4 21v-2a4 4 0 0 1 3-3.87"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
+                btn.style.border = '';
+            }
+        }
+        updateUserBtnIcon();
 
-            const show = () => { modal.classList.add('show'); modal.setAttribute('aria-hidden','false'); const pw = modal.querySelector('input[name="password"]'); try{ pw && pw.focus(); }catch(e){} };
-            const hide = () => { modal.classList.remove('show'); modal.setAttribute('aria-hidden','true'); };
-
-            btn.addEventListener('click', (e) => { e.preventDefault(); show(); });
-            modal.querySelector('.admin-modal-close').addEventListener('click', hide);
-            modal.querySelector('.admin-modal-cancel').addEventListener('click', hide);
-            modal.querySelector('.modal-backdrop').addEventListener('click', hide);
-
-            modal.querySelector('#admin-login-form').addEventListener('submit', (e) => {
-                e.preventDefault();
-                const form = e.target;
-                const pwd = (form.password.value || '').trim();
-                if (pwd === 'admin123'){
-                    sessionStorage.setItem('admin_authed','1');
-                    hide();
-                    window.location.href = 'admin/index.html';
-                } else {
-                    const err = modal.querySelector('.error'); err.textContent = 'Acceso denegado'; err.style.display = 'block';
+        // Listen for auth state changes
+        (async function watchAuth(){
+            try{
+                const ok = await (window.waitForFirestore ? window.waitForFirestore(5000) : Promise.resolve(false));
+                if (ok && window.__FIRESTORE_AUTH__){
+                    window.__FIRESTORE_AUTH__.onAuthStateChanged(() => updateUserBtnIcon());
                 }
-            });
+            }catch(e){}
+        })();
 
-            document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') hide(); });
+        if (document.querySelector('.user-modal')) return; // already initialized
+
+        const modal = document.createElement('div');
+        modal.className = 'user-modal';
+        modal.setAttribute('role','dialog');
+        modal.setAttribute('aria-modal','true');
+        modal.setAttribute('aria-hidden','true');
+        modal.innerHTML = `
+            <div class="modal-backdrop"></div>
+            <div class="modal-card">
+                <button class="modal-close" aria-label="Cerrar">✕</button>
+                <div id="user-modal-content">
+                    <div class="user-modal-loading" style="text-align:center;padding:20px;color:var(--muted)">Cargando...</div>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+
+        const show = () => { modal.classList.add('show'); modal.setAttribute('aria-hidden','false'); renderUserModal(); };
+        const hide = () => { modal.classList.remove('show'); modal.setAttribute('aria-hidden','true'); };
+
+        btn.addEventListener('click', (e) => { e.preventDefault(); show(); });
+        modal.querySelector('.modal-close').addEventListener('click', hide);
+        modal.querySelector('.modal-backdrop').addEventListener('click', hide);
+        document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') hide(); });
+
+        window.__userModalHide = hide;
+
+        // ─── Render content based on auth state ───
+        async function renderUserModal(){
+            const content = modal.querySelector('#user-modal-content');
+            content.innerHTML = '<div class="user-modal-loading" style="text-align:center;padding:20px;color:var(--muted)">Cargando...</div>';
+
+            try{
+                const ok = await (window.waitForFirestore ? window.waitForFirestore(4000) : Promise.resolve(false));
+                if (!ok || !window.__FIRESTORE_AUTH__){
+                    content.innerHTML = `
+                        <div style="text-align:center;padding:10px 0">
+                            <div style="font-size:2.2rem;margin-bottom:10px">🔐</div>
+                            <h3 style="margin:0 0 4px">Mi Cuenta</h3>
+                            <p style="color:var(--muted);font-size:0.88rem;margin-bottom:6px">Inicia sesión para ver tus compras y acceder a promociones exclusivas.</p>
+                            <p style="color:var(--muted);font-size:0.8rem;margin-bottom:16px">No es necesario para comprar, solo para beneficios adicionales.</p>
+                            <div class="user-not-ready" style="color:var(--muted);font-size:0.85rem;padding:12px">Servicio no disponible momentáneamente.</div>
+                        </div>`;
+                    return;
+                }
+
+                const auth = window.__FIRESTORE_AUTH__;
+                const user = auth.currentUser;
+
+                if (!user){
+                    // Check for redirect result first (handles redirect flow)
+                    try{
+                        const result = await auth.getRedirectResult();
+                        if (result && result.user){
+                            renderUserModal();
+                            return;
+                        }
+                    }catch(e){ /* no redirect result */ }
+
+                    content.innerHTML = `
+                        <div style="text-align:center;padding:6px 0">
+                            <div style="font-size:2.2rem;margin-bottom:8px">🔐</div>
+                            <h3 style="margin:0 0 4px">Mi Cuenta</h3>
+                            <p style="color:var(--muted);font-size:0.88rem;margin-bottom:4px">Inicia sesión para ver tus compras y acceder a promociones exclusivas.</p>
+                            <p style="color:var(--muted);font-size:0.78rem;margin-bottom:18px">No es necesario para comprar, solo para beneficios adicionales.</p>
+                            <button id="google-signin-btn" class="btn google-btn">
+                                <svg viewBox="0 0 24 24" width="18" height="18" style="margin-right:8px"><path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#fff" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#fff" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#fff" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                                Continuar con Google
+                            </button>
+                            <div class="error" id="user-modal-error" style="margin-top:12px"></div>
+                        </div>`;
+
+                    const googleBtn = content.querySelector('#google-signin-btn');
+                    const errEl = content.querySelector('#user-modal-error');
+                    if (googleBtn){
+                        googleBtn.addEventListener('click', async () => {
+                            try{
+                                const provider = new window.firebase.auth.GoogleAuthProvider();
+                                try {
+                                    await auth.signInWithPopup(provider);
+                                    renderUserModal();
+                                } catch (popupErr) {
+                                    if (popupErr.code === 'auth/operation-not-supported-in-this-environment' || popupErr.code === 'auth/popup-blocked') {
+                                        await auth.signInWithRedirect(provider);
+                                    } else {
+                                        throw popupErr;
+                                    }
+                                }
+                            }catch(e){
+                                if (errEl) { errEl.textContent = 'Error al iniciar sesión: ' + e.message; errEl.style.display = 'block'; }
+                            }
+                        });
+                    }
+                } else {
+                    // ─── User is signed in ───
+                    const isAdmin = (user.email || '').toLowerCase() === 'beautystudiodj@gmail.com';
+                    const name = user.displayName || user.email || 'Usuario';
+                    const photo = user.photoURL || '';
+                    const email = user.email || '';
+                    const uid = user.uid;
+
+                    // Load customer invoices
+                    let invoices = [];
+                    try{
+                        const snap = await window.__FIRESTORE_DB__.collection('invoices').where('uid','==',uid).get();
+                        invoices = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        invoices.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+                    }catch(e){
+                        try{
+                            const snap = await window.__FIRESTORE_DB__.collection('invoices').get();
+                            invoices = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(i => i.uid === uid);
+                            invoices.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+                        }catch(e2){}
+                    }
+
+                    let infoHtml = `
+                        <div style="text-align:center">
+                            ${photo ? `<img src="${escapeHtml(photo)}" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;margin-bottom:8px;border:2px solid var(--blush-200)">` : '<div style="width:56px;height:56px;border-radius:50%;background:var(--wine-700);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:800;margin-bottom:8px">' + (name[0]||'').toUpperCase() + '</div>'}
+                            <h3 style="margin:0 0 2px">${escapeHtml(name)}</h3>
+                            <p style="color:var(--muted);font-size:0.82rem;margin:0 0 4px">${escapeHtml(email)}</p>
+                            <p style="color:var(--muted);font-size:0.78rem;margin:0 0 14px">${invoices.length} factura${invoices.length !== 1 ? 's' : ''}</p>
+                        </div>
+                        <hr style="border:none;border-top:1px solid var(--line);margin:12px 0">`;
+
+                    // Admin gate
+                    if (isAdmin){
+                        infoHtml += `
+                            <div style="background:var(--blush-100);border-radius:10px;padding:12px;margin-bottom:12px;text-align:center">
+                                <p style="font-size:0.85rem;font-weight:700;color:var(--wine-700);margin:0 0 8px">👑 Administrador</p>
+                                <button id="admin-gate-btn" class="btn small" style="width:100%">Acceder al Panel de Administración</button>
+                                <div id="admin-password-area" style="display:none;margin-top:10px">
+                                    <input id="admin-password-input" type="password" placeholder="Contraseña de admin" class="admin-input" style="margin:0 0 8px" />
+                                    <button id="admin-login-submit" class="btn small" style="width:100%">Ingresar</button>
+                                    <div id="admin-password-error" style="color:#c0392b;font-size:0.82rem;margin-top:6px;display:none"></div>
+                                </div>
+                            </div>`;
+                    }
+
+                    // Customer invoices list
+                    if (invoices.length > 0){
+                        infoHtml += `<div style="max-height:260px;overflow-y:auto">`;
+                        invoices.forEach(inv => {
+                            const total = formatCOP(inv.total || inv.subtotal || 0);
+                            const date = new Date(inv.createdAt || Date.now()).toLocaleString('es-CO', {day:'2-digit', month:'short', year:'numeric'});
+                            const badge = inv.status === 'confirmed'
+                                ? '<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">Confirmada</span>'
+                                : '<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">Pendiente</span>';
+                            const items = (inv.items||[]).map(it => escapeHtml(it.name||'')).join(', ');
+                            infoHtml += `
+                                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);gap:8px">
+                                    <div style="flex:1;min-width:0">
+                                        <div style="font-weight:600;font-size:0.85rem;color:var(--wine-700);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${items}</div>
+                                        <div style="font-size:0.75rem;color:var(--muted)">${date} ${badge}</div>
+                                    </div>
+                                    <div style="font-weight:800;font-size:0.88rem;color:var(--wine-700);white-space:nowrap">${total}</div>
+                                </div>`;
+                        });
+                        infoHtml += `</div>`;
+                    } else {
+                        infoHtml += `<p style="text-align:center;color:var(--muted);font-size:0.85rem;margin:8px 0">Aún no tienes compras registradas.</p>`;
+                    }
+
+                    // Sign out
+                    infoHtml += `
+                        <hr style="border:none;border-top:1px solid var(--line);margin:12px 0">
+                        <button id="user-signout-btn" class="btn-outline" style="width:100%;padding:10px;font-size:0.82rem">Cerrar sesión</button>`;
+
+                    content.innerHTML = infoHtml;
+
+                    // ─── Admin gate logic ───
+                    const adminBtn = content.querySelector('#admin-gate-btn');
+                    if (adminBtn){
+                        adminBtn.addEventListener('click', () => {
+                            const area = content.querySelector('#admin-password-area');
+                            area.style.display = area.style.display === 'none' ? 'block' : 'none';
+                        });
+                    }
+                    const adminSubmit = content.querySelector('#admin-login-submit');
+                    if (adminSubmit){
+                        adminSubmit.addEventListener('click', () => {
+                            const pw = content.querySelector('#admin-password-input').value.trim();
+                            const err = content.querySelector('#admin-password-error');
+                            if (pw === 'admin123'){
+                                sessionStorage.setItem('admin_authed','1');
+                                window.__userModalHide && window.__userModalHide();
+                                window.location.href = 'admin/index.html';
+                            } else {
+                                err.textContent = 'Contraseña incorrecta';
+                                err.style.display = 'block';
+                            }
+                        });
+                    }
+
+                    // ─── Sign out ───
+                    const signOutBtn = content.querySelector('#user-signout-btn');
+                    if (signOutBtn){
+                        signOutBtn.addEventListener('click', async () => {
+                            try{ await auth.signOut(); }catch(e){}
+                            renderUserModal();
+                        });
+                    }
+                }
+            }catch(e){
+                content.innerHTML = `<div style="text-align:center;padding:16px;color:#c0392b">Error: ${escapeHtml(e.message || '')}</div>`;
+            }
         }
     }catch(e){ console.warn('initUserPanelUI failed', e); }
 }

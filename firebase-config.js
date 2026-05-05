@@ -29,6 +29,7 @@
     window.__FIRESTORE_INIT_PROMISE__ = Promise.resolve()
         .then(function () { return loadScript('https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js'); })
         .then(function () { return loadScript('https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js'); })
+        .then(function () { return loadScript('https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js'); })
         .then(function () {
             if (!window.firebase) throw new Error('Firebase SDK no disponible');
             if (!window.firebase.apps || window.firebase.apps.length === 0) {
@@ -37,7 +38,8 @@
             var db = window.firebase.firestore();
             window.__FIRESTORE_DB__ = db;
             window.__FIRESTORE_READY = true;
-            console.log('%c[DJ] Firestore listo ', 'background:#188038;color:#fff;padding:2px 8px;border-radius:4px;font-weight:bold;');
+            window.__FIRESTORE_AUTH__ = window.firebase.auth();
+            console.log('%c[DJ] Firestore + Auth listo ', 'background:#188038;color:#fff;padding:2px 8px;border-radius:4px;font-weight:bold;');
             return true;
         })
         .catch(function (err) {
