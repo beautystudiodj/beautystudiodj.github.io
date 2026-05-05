@@ -497,7 +497,7 @@
                 signOutBtn.addEventListener('click', async function(){
                     var a = window.__FIRESTORE_AUTH__;
                     if (a) await a.signOut();
-                    pageContent.innerHTML = '<div style="text-align:center;padding:60px 0;color:var(--muted)"><div style="font-size:3rem;margin-bottom:14px">👋</div><p style="font-size:1.05rem;font-weight:600;color:var(--ink);margin-bottom:4px">Sesión cerrada</p><p style="font-size:.88rem;margin-bottom:18px">Gracias por visitarnos. Vuelve pronto.</p><a href="usuario.html" class="btn">Volver a iniciar sesión</a></div>';
+                    location.reload();
                 });
             }
         }
@@ -535,14 +535,19 @@
         // Main
         (async function initPage(){
             mostrarCargando();
+
+            // Safety timeout
+            var _pageTimer = setTimeout(function(){
+                if (document.querySelector('#user-page-content .loading-spinner')){
+                    mostrarError('El servicio está tardando en responder. Recarga la página.');
+                }
+            }, 7000);
+
             try {
-                await Promise.race([
-                    Promise.all([
-                        (window.waitForFirestore?window.waitForFirestore(6000):Promise.resolve(false)),
-                        (window.__AUTH_READY__||Promise.resolve())
-                    ]),
-                    new Promise(function(r){setTimeout(r,5500);})
-                ]);
+                if (window.waitForFirestore) await window.waitForFirestore(6000);
+                if (window.__AUTH_READY__) await Promise.race([window.__AUTH_READY__, new Promise(function(r){setTimeout(r,5000);})]);
+
+                clearTimeout(_pageTimer);
                 var auth = window.__FIRESTORE_AUTH__;
                 var db = window.__FIRESTORE_DB__;
                 if (!auth || !db) { mostrarError('El servicio no está disponible. Verifica tu conexión e intenta de nuevo.'); return; }

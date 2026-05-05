@@ -2937,46 +2937,37 @@ function initUserPanelUI(){
         window.__userModalHide = hide;
 
         // ─── Render content based on auth state ───
-        async function renderUserModal(){
-            const content = modal.querySelector('#user-modal-content');
+        var _modalTimer = null;
 
-            // Wait for auth + Firestore to settle (up to 6s total)
+        async function renderUserModal(){
+            var content = modal.querySelector('#user-modal-content');
+
             content.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);font-size:0.9rem">Cargando...</div>';
 
-            try{
-                await Promise.race([
-                    Promise.all([
-                        (window.waitForFirestore ? window.waitForFirestore(6000) : Promise.resolve(false)),
-                        (window.__AUTH_READY__ || Promise.resolve())
-                    ]),
-                    new Promise(function(r){ setTimeout(r, 5500); })
-                ]);
+            // Safety timeout: never stay on loading > 5s
+            if (_modalTimer) clearTimeout(_modalTimer);
+            _modalTimer = setTimeout(function(){
+                var c = modal.querySelector('#user-modal-content');
+                if (c && c.textContent.indexOf('Cargando') !== -1){
+                    c.innerHTML = _renderFallback();
+                    _attachFallbackHandlers(c);
+                }
+            }, 5000);
 
-                const auth2 = window.__FIRESTORE_AUTH__;
-                const db = window.__FIRESTORE_DB__;
-                const user = auth2 ? auth2.currentUser : null;
+            try{
+                // Wait for both Firestore and Auth to be ready
+                if (window.waitForFirestore) await window.waitForFirestore(5000);
+                if (window.__AUTH_READY__) await Promise.race([window.__AUTH_READY__, new Promise(function(r){setTimeout(r,4000);})]);
+
+                if (_modalTimer) { clearTimeout(_modalTimer); _modalTimer = null; }
+
+                var auth2 = window.__FIRESTORE_AUTH__;
+                var db = window.__FIRESTORE_DB__;
+                var user = auth2 ? auth2.currentUser : null;
 
                 if (!auth2 || !db){
-                    content.innerHTML = `
-                        <div style="text-align:center;padding:6px 0">
-                            <div style="font-size:2.2rem;margin-bottom:8px">🔐</div>
-                            <h3 style="margin:0 0 4px">Mi Cuenta</h3>
-                            <p style="color:var(--muted);font-size:0.88rem;margin-bottom:4px">El servicio está tardando en conectar.</p>
-                            <p style="color:var(--muted);font-size:0.78rem;margin-bottom:16px">Posiblemente hay una sesión pendiente. Intenta reiniciar.</p>
-                            <button id="clear-auth-btn" class="btn-outline" style="width:100%;padding:10px;font-size:0.82rem">Limpiar sesión pendiente</button>
-                            <div id="retry-auth-msg" style="margin-top:8px;font-size:0.82rem;color:var(--muted)"></div>
-                        </div>`;
-                    const clearBtn = content.querySelector('#clear-auth-btn');
-                    const msg = content.querySelector('#retry-auth-msg');
-                    clearBtn.addEventListener('click', async function(){
-                        msg.textContent = 'Limpiando...';
-                        if (auth2) try{ await auth2.signOut(); }catch(e){}
-                        try{
-                            var k = Object.keys(localStorage).find(function(x){ return x.indexOf('firebase:auth') !== -1; });
-                            if (k) localStorage.removeItem(k);
-                        }catch(e){}
-                        msg.textContent = 'Listo. Recarga la página.';
-                    });
+                    content.innerHTML = _renderFallback(auth2);
+                    _attachFallbackHandlers(content);
                     return;
                 }
 
@@ -2986,7 +2977,34 @@ function initUserPanelUI(){
                     _renderSignedIn(content, user);
                 }
             }catch(e){
-                content.innerHTML = '<div style="text-align:center;padding:16px;color:#c0392b">Error</div>';
+                if (_modalTimer) { clearTimeout(_modalTimer); _modalTimer = null; }
+                content.innerHTML = _renderFallback();
+            }
+        }
+
+        function _renderFallback(auth2){
+            return '<div style="text-align:center;padding:6px 0">' +
+                '<div style="font-size:2.2rem;margin-bottom:8px">🔐</div>' +
+                '<h3 style="margin:0 0 4px">Mi Cuenta</h3>' +
+                '<p style="color:var(--muted);font-size:0.88rem;margin-bottom:4px">El servicio está tardando en conectar.</p>' +
+                '<p style="color:var(--muted);font-size:0.78rem;margin-bottom:16px">Intenta recargar la página o limpia la sesión.</p>' +
+                '<button id="clear-auth-btn" class="btn-outline" style="width:100%;padding:10px;font-size:0.82rem">Limpiar sesión pendiente</button>' +
+                '<div id="retry-auth-msg" style="margin-top:8px;font-size:0.82rem;color:var(--muted)"></div></div>';
+        }
+        function _attachFallbackHandlers(content){
+            var clearBtn = content.querySelector('#clear-auth-btn');
+            var msg = content.querySelector('#retry-auth-msg');
+            if (clearBtn){
+                clearBtn.addEventListener('click', async function(){
+                    msg.textContent = 'Limpiando...';
+                    try{
+                        var a = window.__FIRESTORE_AUTH__;
+                        if (a) await a.signOut();
+                        var keys = Object.keys(localStorage).filter(function(k){ return k.indexOf('firebase:auth') !== -1; });
+                        keys.forEach(function(k){ try{ localStorage.removeItem(k); }catch(e){} });
+                    }catch(e){}
+                    msg.textContent = 'Listo. Recarga la página.';
+                });
             }
         }
 
@@ -3121,7 +3139,8 @@ function initUserPanelUI(){
             if (signOutBtn){
                 signOutBtn.addEventListener('click', async () => {
                     try{ await auth.signOut(); }catch(e){}
-                    renderUserModal();
+                    window.__userModalHide && window.__userModalHide();
+                    location.reload();
                 });
             }
         }
