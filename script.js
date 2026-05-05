@@ -2908,182 +2908,185 @@ function initUserPanelUI(){
         window.__userModalHide = hide;
 
         // ─── Render content based on auth state ───
+        let _renderTimeout = null;
+
         async function renderUserModal(){
             const content = modal.querySelector('#user-modal-content');
-            content.innerHTML = '<div class="user-modal-loading" style="text-align:center;padding:20px;color:var(--muted)">Cargando...</div>';
+
+            // Show immediate state if we know the user
+            const auth = window.__FIRESTORE_AUTH__;
+            const currentUser = auth ? auth.currentUser : null;
+            if (currentUser){
+                // already signed in, render immediately without loading
+                _renderSignedIn(content, currentUser);
+                return;
+            }
+
+            // Show brief loading, but with a short timeout
+            content.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);font-size:0.9rem">Cargando...</div>';
 
             try{
-                const ok = await (window.waitForFirestore ? window.waitForFirestore(4000) : Promise.resolve(false));
-                if (!ok || !window.__FIRESTORE_AUTH__){
+                const ok = await Promise.race([
+                    (window.waitForFirestore ? window.waitForFirestore(4000) : Promise.resolve(false)),
+                    new Promise(r => setTimeout(() => r(false), 3500))
+                ]);
+
+                if (!ok || !window.__FIRESTORE_AUTH__ || !window.__FIRESTORE_DB__){
                     content.innerHTML = `
                         <div style="text-align:center;padding:10px 0">
                             <div style="font-size:2.2rem;margin-bottom:10px">🔐</div>
                             <h3 style="margin:0 0 4px">Mi Cuenta</h3>
                             <p style="color:var(--muted);font-size:0.88rem;margin-bottom:6px">Inicia sesión para ver tus compras y acceder a promociones exclusivas.</p>
                             <p style="color:var(--muted);font-size:0.8rem;margin-bottom:16px">No es necesario para comprar, solo para beneficios adicionales.</p>
-                            <div class="user-not-ready" style="color:var(--muted);font-size:0.85rem;padding:12px">Servicio no disponible momentáneamente.</div>
+                            <div class="user-not-ready" style="color:var(--muted);font-size:0.85rem;padding:12px">Servicio no disponible momentáneamente. Intenta de nuevo.</div>
                         </div>`;
                     return;
                 }
 
-                const auth = window.__FIRESTORE_AUTH__;
                 const user = auth.currentUser;
 
                 if (!user){
-                    // Check for redirect result first (handles redirect flow)
-                    try{
-                        const result = await auth.getRedirectResult();
-                        if (result && result.user){
-                            renderUserModal();
-                            return;
-                        }
-                    }catch(e){ /* no redirect result */ }
-
-                    content.innerHTML = `
-                        <div style="text-align:center;padding:6px 0">
-                            <div style="font-size:2.2rem;margin-bottom:8px">🔐</div>
-                            <h3 style="margin:0 0 4px">Mi Cuenta</h3>
-                            <p style="color:var(--muted);font-size:0.88rem;margin-bottom:4px">Inicia sesión para ver tus compras y acceder a promociones exclusivas.</p>
-                            <p style="color:var(--muted);font-size:0.78rem;margin-bottom:18px">No es necesario para comprar, solo para beneficios adicionales.</p>
-                            <button id="google-signin-btn" class="btn google-btn">
-                                <svg viewBox="0 0 24 24" width="18" height="18" style="margin-right:8px"><path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#fff" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#fff" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#fff" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-                                Continuar con Google
-                            </button>
-                            <div class="error" id="user-modal-error" style="margin-top:12px"></div>
-                        </div>`;
-
-                    const googleBtn = content.querySelector('#google-signin-btn');
-                    const errEl = content.querySelector('#user-modal-error');
-                    if (googleBtn){
-                        googleBtn.addEventListener('click', async () => {
-                            try{
-                                const provider = new window.firebase.auth.GoogleAuthProvider();
-                                try {
-                                    await auth.signInWithPopup(provider);
-                                    renderUserModal();
-                                } catch (popupErr) {
-                                    if (popupErr.code === 'auth/operation-not-supported-in-this-environment' || popupErr.code === 'auth/popup-blocked') {
-                                        await auth.signInWithRedirect(provider);
-                                    } else {
-                                        throw popupErr;
-                                    }
-                                }
-                            }catch(e){
-                                if (errEl) { errEl.textContent = 'Error al iniciar sesión: ' + e.message; errEl.style.display = 'block'; }
-                            }
-                        });
-                    }
+                    _renderSignIn(content, auth);
                 } else {
-                    // ─── User is signed in ───
-                    const isAdmin = (user.email || '').toLowerCase() === 'beautystudiodj@gmail.com';
-                    const name = user.displayName || user.email || 'Usuario';
-                    const photo = user.photoURL || '';
-                    const email = user.email || '';
-                    const uid = user.uid;
-
-                    // Load customer invoices
-                    let invoices = [];
-                    try{
-                        const snap = await window.__FIRESTORE_DB__.collection('invoices').where('uid','==',uid).get();
-                        invoices = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-                        invoices.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
-                    }catch(e){
-                        try{
-                            const snap = await window.__FIRESTORE_DB__.collection('invoices').get();
-                            invoices = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(i => i.uid === uid);
-                            invoices.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
-                        }catch(e2){}
-                    }
-
-                    let infoHtml = `
-                        <div style="text-align:center">
-                            ${photo ? `<img src="${escapeHtml(photo)}" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;margin-bottom:8px;border:2px solid var(--blush-200)">` : '<div style="width:56px;height:56px;border-radius:50%;background:var(--wine-700);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:800;margin-bottom:8px">' + (name[0]||'').toUpperCase() + '</div>'}
-                            <h3 style="margin:0 0 2px">${escapeHtml(name)}</h3>
-                            <p style="color:var(--muted);font-size:0.82rem;margin:0 0 4px">${escapeHtml(email)}</p>
-                            <p style="color:var(--muted);font-size:0.78rem;margin:0 0 14px">${invoices.length} factura${invoices.length !== 1 ? 's' : ''}</p>
-                        </div>
-                        <hr style="border:none;border-top:1px solid var(--line);margin:12px 0">`;
-
-                    // Admin gate
-                    if (isAdmin){
-                        infoHtml += `
-                            <div style="background:var(--blush-100);border-radius:10px;padding:12px;margin-bottom:12px;text-align:center">
-                                <p style="font-size:0.85rem;font-weight:700;color:var(--wine-700);margin:0 0 8px">👑 Administrador</p>
-                                <button id="admin-gate-btn" class="btn small" style="width:100%">Acceder al Panel de Administración</button>
-                                <div id="admin-password-area" style="display:none;margin-top:10px">
-                                    <input id="admin-password-input" type="password" placeholder="Contraseña de admin" class="admin-input" style="margin:0 0 8px" />
-                                    <button id="admin-login-submit" class="btn small" style="width:100%">Ingresar</button>
-                                    <div id="admin-password-error" style="color:#c0392b;font-size:0.82rem;margin-top:6px;display:none"></div>
-                                </div>
-                            </div>`;
-                    }
-
-                    // Customer invoices list
-                    if (invoices.length > 0){
-                        infoHtml += `<div style="max-height:260px;overflow-y:auto">`;
-                        invoices.forEach(inv => {
-                            const total = formatCOP(inv.total || inv.subtotal || 0);
-                            const date = new Date(inv.createdAt || Date.now()).toLocaleString('es-CO', {day:'2-digit', month:'short', year:'numeric'});
-                            const badge = inv.status === 'confirmed'
-                                ? '<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">Confirmada</span>'
-                                : '<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">Pendiente</span>';
-                            const items = (inv.items||[]).map(it => escapeHtml(it.name||'')).join(', ');
-                            infoHtml += `
-                                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);gap:8px">
-                                    <div style="flex:1;min-width:0">
-                                        <div style="font-weight:600;font-size:0.85rem;color:var(--wine-700);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${items}</div>
-                                        <div style="font-size:0.75rem;color:var(--muted)">${date} ${badge}</div>
-                                    </div>
-                                    <div style="font-weight:800;font-size:0.88rem;color:var(--wine-700);white-space:nowrap">${total}</div>
-                                </div>`;
-                        });
-                        infoHtml += `</div>`;
-                    } else {
-                        infoHtml += `<p style="text-align:center;color:var(--muted);font-size:0.85rem;margin:8px 0">Aún no tienes compras registradas.</p>`;
-                    }
-
-                    // Sign out
-                    infoHtml += `
-                        <hr style="border:none;border-top:1px solid var(--line);margin:12px 0">
-                        <button id="user-signout-btn" class="btn-outline" style="width:100%;padding:10px;font-size:0.82rem">Cerrar sesión</button>`;
-
-                    content.innerHTML = infoHtml;
-
-                    // ─── Admin gate logic ───
-                    const adminBtn = content.querySelector('#admin-gate-btn');
-                    if (adminBtn){
-                        adminBtn.addEventListener('click', () => {
-                            const area = content.querySelector('#admin-password-area');
-                            area.style.display = area.style.display === 'none' ? 'block' : 'none';
-                        });
-                    }
-                    const adminSubmit = content.querySelector('#admin-login-submit');
-                    if (adminSubmit){
-                        adminSubmit.addEventListener('click', () => {
-                            const pw = content.querySelector('#admin-password-input').value.trim();
-                            const err = content.querySelector('#admin-password-error');
-                            if (pw === 'admin123'){
-                                sessionStorage.setItem('admin_authed','1');
-                                window.__userModalHide && window.__userModalHide();
-                                window.location.href = 'admin/index.html';
-                            } else {
-                                err.textContent = 'Contraseña incorrecta';
-                                err.style.display = 'block';
-                            }
-                        });
-                    }
-
-                    // ─── Sign out ───
-                    const signOutBtn = content.querySelector('#user-signout-btn');
-                    if (signOutBtn){
-                        signOutBtn.addEventListener('click', async () => {
-                            try{ await auth.signOut(); }catch(e){}
-                            renderUserModal();
-                        });
-                    }
+                    _renderSignedIn(content, user);
                 }
             }catch(e){
                 content.innerHTML = `<div style="text-align:center;padding:16px;color:#c0392b">Error: ${escapeHtml(e.message || '')}</div>`;
+            }
+        }
+
+        function _renderSignIn(content, auth){
+            content.innerHTML = `
+                <div style="text-align:center;padding:6px 0">
+                    <div style="font-size:2.2rem;margin-bottom:8px">🔐</div>
+                    <h3 style="margin:0 0 4px">Mi Cuenta</h3>
+                    <p style="color:var(--muted);font-size:0.88rem;margin-bottom:4px">Inicia sesión para ver tus compras y acceder a promociones exclusivas.</p>
+                    <p style="color:var(--muted);font-size:0.78rem;margin-bottom:18px">No es necesario para comprar, solo para beneficios adicionales.</p>
+                    <button id="google-signin-btn" class="btn google-btn">
+                        <svg viewBox="0 0 24 24" width="18" height="18" style="margin-right:8px"><path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#fff" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#fff" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#fff" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                        Continuar con Google
+                    </button>
+                    <div class="error" id="user-modal-error" style="margin-top:12px"></div>
+                </div>`;
+
+            const googleBtn = content.querySelector('#google-signin-btn');
+            const errEl = content.querySelector('#user-modal-error');
+            if (googleBtn){
+                googleBtn.addEventListener('click', async () => {
+                    try{
+                        const provider = new window.firebase.auth.GoogleAuthProvider();
+                        await auth.signInWithRedirect(provider);
+                    }catch(e){
+                        if (errEl) { errEl.textContent = 'Error al iniciar sesión: ' + e.message; errEl.style.display = 'block'; }
+                    }
+                });
+            }
+        }
+
+        async function _renderSignedIn(content, user){
+            const auth = window.__FIRESTORE_AUTH__;
+            const isAdmin = (user.email || '').toLowerCase() === 'beautystudiodj@gmail.com';
+            const name = user.displayName || user.email || 'Usuario';
+            const photo = user.photoURL || '';
+            const email = user.email || '';
+            const uid = user.uid;
+
+            let invoices = [];
+            try{
+                const snap = await window.__FIRESTORE_DB__.collection('invoices').where('uid','==',uid).get();
+                invoices = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                invoices.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+            }catch(e){
+                try{
+                    const snap = await window.__FIRESTORE_DB__.collection('invoices').get();
+                    invoices = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(i => i.uid === uid);
+                    invoices.sort((a,b) => (b.createdAt||0) - (a.createdAt||0));
+                }catch(e2){}
+            }
+
+            let infoHtml = `
+                <div style="text-align:center">
+                    ${photo ? `<img src="${escapeHtml(photo)}" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;margin-bottom:8px;border:2px solid var(--blush-200)">` : '<div style="width:56px;height:56px;border-radius:50%;background:var(--wine-700);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:1.4rem;font-weight:800;margin-bottom:8px">' + (name[0]||'').toUpperCase() + '</div>'}
+                    <h3 style="margin:0 0 2px">${escapeHtml(name)}</h3>
+                    <p style="color:var(--muted);font-size:0.82rem;margin:0 0 4px">${escapeHtml(email)}</p>
+                    <p style="color:var(--muted);font-size:0.78rem;margin:0 0 14px">${invoices.length} factura${invoices.length !== 1 ? 's' : ''}</p>
+                </div>
+                <hr style="border:none;border-top:1px solid var(--line);margin:12px 0">`;
+
+            // Admin gate
+            if (isAdmin){
+                infoHtml += `
+                    <div style="background:var(--blush-100);border-radius:10px;padding:12px;margin-bottom:12px;text-align:center">
+                        <p style="font-size:0.85rem;font-weight:700;color:var(--wine-700);margin:0 0 8px">👑 Administrador</p>
+                        <button id="admin-gate-btn" class="btn small" style="width:100%">Acceder al Panel de Administración</button>
+                        <div id="admin-password-area" style="display:none;margin-top:10px">
+                            <input id="admin-password-input" type="password" placeholder="Contraseña de admin" class="admin-input" style="margin:0 0 8px" />
+                            <button id="admin-login-submit" class="btn small" style="width:100%">Ingresar</button>
+                            <div id="admin-password-error" style="color:#c0392b;font-size:0.82rem;margin-top:6px;display:none"></div>
+                        </div>
+                    </div>`;
+            }
+
+            // Customer invoices list
+            if (invoices.length > 0){
+                infoHtml += `<div style="max-height:260px;overflow-y:auto">`;
+                invoices.forEach(inv => {
+                    const total = formatCOP(inv.total || inv.subtotal || 0);
+                    const date = new Date(inv.createdAt || Date.now()).toLocaleString('es-CO', {day:'2-digit', month:'short', year:'numeric'});
+                    const badge = inv.status === 'confirmed'
+                        ? '<span style="background:#d4edda;color:#155724;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">Confirmada</span>'
+                        : '<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:20px;font-size:0.72rem;font-weight:700">Pendiente</span>';
+                    const items = (inv.items||[]).map(it => escapeHtml(it.name||'')).join(', ');
+                    infoHtml += `
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);gap:8px">
+                            <div style="flex:1;min-width:0">
+                                <div style="font-weight:600;font-size:0.85rem;color:var(--wine-700);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${items}</div>
+                                <div style="font-size:0.75rem;color:var(--muted)">${date} ${badge}</div>
+                            </div>
+                            <div style="font-weight:800;font-size:0.88rem;color:var(--wine-700);white-space:nowrap">${total}</div>
+                        </div>`;
+                });
+                infoHtml += `</div>`;
+            } else {
+                infoHtml += `<p style="text-align:center;color:var(--muted);font-size:0.85rem;margin:8px 0">Aún no tienes compras registradas.</p>`;
+            }
+
+            // Sign out
+            infoHtml += `
+                <hr style="border:none;border-top:1px solid var(--line);margin:12px 0">
+                <button id="user-signout-btn" class="btn-outline" style="width:100%;padding:10px;font-size:0.82rem">Cerrar sesión</button>`;
+
+            content.innerHTML = infoHtml;
+
+            const adminBtn = content.querySelector('#admin-gate-btn');
+            if (adminBtn){
+                adminBtn.addEventListener('click', () => {
+                    const area = content.querySelector('#admin-password-area');
+                    area.style.display = area.style.display === 'none' ? 'block' : 'none';
+                });
+            }
+            const adminSubmit = content.querySelector('#admin-login-submit');
+            if (adminSubmit){
+                adminSubmit.addEventListener('click', () => {
+                    const pw = content.querySelector('#admin-password-input').value.trim();
+                    const err = content.querySelector('#admin-password-error');
+                    if (pw === 'admin123'){
+                        sessionStorage.setItem('admin_authed','1');
+                        window.__userModalHide && window.__userModalHide();
+                        window.location.href = 'admin/index.html';
+                    } else {
+                        err.textContent = 'Contraseña incorrecta';
+                        err.style.display = 'block';
+                    }
+                });
+            }
+
+            const signOutBtn = content.querySelector('#user-signout-btn');
+            if (signOutBtn){
+                signOutBtn.addEventListener('click', async () => {
+                    try{ await auth.signOut(); }catch(e){}
+                    renderUserModal();
+                });
             }
         }
     }catch(e){ console.warn('initUserPanelUI failed', e); }

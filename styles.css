@@ -718,7 +718,7 @@ ul.clean-list li::before {
     gap: 10px;
 }
 .floating-whatsapp:hover { transform: translateY(-3px) scale(1.04); box-shadow: 0 14px 32px rgba(37,211,102,.45); }
-.floating-whatsapp svg { width: 20px; height: 20px; flex-shrink: 0; }
+.floating-whatsapp svg { width: 16px; height: 16px; flex-shrink: 0; }
 
 .floating-cart {
     position: fixed;
