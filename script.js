@@ -2908,45 +2908,60 @@ function initUserPanelUI(){
         window.__userModalHide = hide;
 
         // ─── Render content based on auth state ───
-        let _renderTimeout = null;
-
         async function renderUserModal(){
             const content = modal.querySelector('#user-modal-content');
 
-            // Show immediate state if we know the user
             const auth = window.__FIRESTORE_AUTH__;
             const currentUser = auth ? auth.currentUser : null;
             if (currentUser){
-                // already signed in, render immediately without loading
                 _renderSignedIn(content, currentUser);
                 return;
             }
 
-            // Show brief loading, but with a short timeout
             content.innerHTML = '<div style="text-align:center;padding:24px;color:var(--muted);font-size:0.9rem">Cargando...</div>';
 
             try{
                 const ok = await Promise.race([
                     (window.waitForFirestore ? window.waitForFirestore(4000) : Promise.resolve(false)),
-                    new Promise(r => setTimeout(() => r(false), 3500))
+                    new Promise(r => setTimeout(() => r(false), 3000))
                 ]);
 
-                if (!ok || !window.__FIRESTORE_AUTH__ || !window.__FIRESTORE_DB__){
+                const auth2 = window.__FIRESTORE_AUTH__;
+                const db = window.__FIRESTORE_DB__;
+
+                if (!ok || !auth2 || !db){
                     content.innerHTML = `
-                        <div style="text-align:center;padding:10px 0">
-                            <div style="font-size:2.2rem;margin-bottom:10px">🔐</div>
+                        <div style="text-align:center;padding:6px 0">
+                            <div style="font-size:2.2rem;margin-bottom:8px">🔐</div>
                             <h3 style="margin:0 0 4px">Mi Cuenta</h3>
-                            <p style="color:var(--muted);font-size:0.88rem;margin-bottom:6px">Inicia sesión para ver tus compras y acceder a promociones exclusivas.</p>
-                            <p style="color:var(--muted);font-size:0.8rem;margin-bottom:16px">No es necesario para comprar, solo para beneficios adicionales.</p>
-                            <div class="user-not-ready" style="color:var(--muted);font-size:0.85rem;padding:12px">Servicio no disponible momentáneamente. Intenta de nuevo.</div>
+                            <p style="color:var(--muted);font-size:0.88rem;margin-bottom:4px">El servicio está tardando en conectar.</p>
+                            <p style="color:var(--muted);font-size:0.78rem;margin-bottom:16px">Posiblemente hay una sesión pendiente. Intenta reiniciar.</p>
+                            <button id="retry-auth-btn" class="btn google-btn" style="background:var(--wine-700);margin-bottom:8px">Reintentar</button>
+                            <button id="clear-auth-btn" class="btn-outline" style="width:100%;padding:10px;font-size:0.82rem">Limpiar sesión pendiente</button>
+                            <div id="retry-auth-msg" style="margin-top:8px;font-size:0.82rem;color:var(--muted)"></div>
                         </div>`;
+                    const retryBtn = content.querySelector('#retry-auth-btn');
+                    const clearBtn = content.querySelector('#clear-auth-btn');
+                    const msg = content.querySelector('#retry-auth-msg');
+                    retryBtn.addEventListener('click', () => { renderUserModal(); });
+                    clearBtn.addEventListener('click', async () => {
+                        try{
+                            msg.textContent = 'Limpiando...';
+                            if (auth2) await auth2.signOut();
+                        }catch(e){}
+                        try{
+                            const key = Object.keys(localStorage).find(k => k.includes('firebase:auth'));
+                            if (key) localStorage.removeItem(key);
+                        }catch(e){}
+                        msg.textContent = 'Listo. Vuelve a intentar.';
+                        setTimeout(() => renderUserModal(), 800);
+                    });
                     return;
                 }
 
-                const user = auth.currentUser;
-
+                const user = auth2.currentUser;
                 if (!user){
-                    _renderSignIn(content, auth);
+                    _renderSignIn(content, auth2);
                 } else {
                     _renderSignedIn(content, user);
                 }
@@ -3051,8 +3066,9 @@ function initUserPanelUI(){
                 infoHtml += `<p style="text-align:center;color:var(--muted);font-size:0.85rem;margin:8px 0">Aún no tienes compras registradas.</p>`;
             }
 
-            // Sign out
+            // Full profile link
             infoHtml += `
+                <a href="usuario.html" style="display:block;text-align:center;padding:8px;font-size:0.85rem;color:var(--wine-700);font-weight:600;text-decoration:none;border-radius:8px;transition:background.18s" onmouseover="this.style.background='var(--blush-100)'" onmouseout="this.style.background='transparent'">Ver perfil completo →</a>
                 <hr style="border:none;border-top:1px solid var(--line);margin:12px 0">
                 <button id="user-signout-btn" class="btn-outline" style="width:100%;padding:10px;font-size:0.82rem">Cerrar sesión</button>`;
 

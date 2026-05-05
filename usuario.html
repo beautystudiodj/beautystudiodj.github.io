@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Cuenta - D&J Beauty Studio</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="https://i.imgur.com/vscZKK3.png" type="image/png">
+    <style>
+        .user-profile-hero {
+            background: linear-gradient(145deg, var(--wine-900) 0%, var(--wine-700) 50%, var(--wine-500) 100%);
+            border-radius: var(--radius-xl);
+            padding: 40px 32px 32px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            margin-top: 24px;
+        }
+        .user-profile-hero::before {
+            content: '';
+            position: absolute;
+            width: 300px; height: 300px;
+            border-radius: 50%;
+            top: -120px; right: -80px;
+            background: rgba(255,255,255,.05);
+            pointer-events: none;
+        }
+        .user-profile-hero::after {
+            content: '';
+            position: absolute;
+            width: 200px; height: 200px;
+            border-radius: 50%;
+            bottom: -80px; left: -60px;
+            background: rgba(255,255,255,.04);
+            pointer-events: none;
+        }
+        .user-avatar-frame {
+            width: 96px; height: 96px;
+            border-radius: 50%;
+            margin: 0 auto 14px;
+            position: relative;
+            z-index: 1;
+        }
+        .user-avatar-frame img, .user-avatar-frame .avatar-placeholder {
+            width: 100%; height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 4px solid rgba(255,255,255,.25);
+            box-shadow: 0 8px 30px rgba(0,0,0,.15);
+        }
+        .user-avatar-frame .avatar-placeholder {
+            background: linear-gradient(135deg, var(--blush-200), var(--wine-500));
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.2rem;
+            font-weight: 800;
+            font-family: 'Montserrat', sans-serif;
+        }
+        .user-name {
+            color: #fff;
+            font-size: 1.6rem;
+            font-weight: 700;
+            margin: 0 0 2px;
+            position: relative;
+            z-index: 1;
+        }
+        .user-email {
+            color: rgba(255,255,255,.7);
+            font-size: .88rem;
+            margin: 0 0 4px;
+            position: relative;
+            z-index: 1;
+        }
+        .user-joined {
+            color: rgba(255,255,255,.5);
+            font-size: .78rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .user-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 14px;
+            margin-top: 28px;
+        }
+        .user-stat-card {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-lg);
+            padding: 20px 14px;
+            text-align: center;
+            box-shadow: var(--shadow-s);
+            transition: transform .2s, box-shadow .2s;
+        }
+        .user-stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-l);
+        }
+        .user-stat-icon {
+            font-size: 1.4rem;
+            margin-bottom: 6px;
+        }
+        .user-stat-value {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 800;
+            font-size: 1.3rem;
+            color: var(--wine-700);
+        }
+        .user-stat-label {
+            font-size: .78rem;
+            color: var(--muted);
+            margin-top: 2px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+
+        .user-invoice-card {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-lg);
+            padding: 18px;
+            box-shadow: var(--shadow-s);
+            transition: transform .2s, box-shadow .2s;
+        }
+        .user-invoice-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-m);
+        }
+        .user-invoice-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--line);
+        }
+        .user-invoice-id {
+            font-weight: 700;
+            font-size: .82rem;
+            color: var(--muted);
+            font-family: 'Montserrat', sans-serif;
+        }
+        .user-invoice-date {
+            font-size: .75rem;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+        .user-invoice-total {
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: var(--wine-700);
+        }
+        .user-invoice-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: .7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+        }
+        .badge-confirmed {
+            background: #d4edda;
+            color: #155724;
+        }
+        .badge-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .user-invoice-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            font-size: .88rem;
+            border-bottom: 1px solid rgba(0,0,0,.04);
+        }
+        .user-invoice-item:last-child {
+            border-bottom: none;
+        }
+        .user-invoice-item-name {
+            color: var(--ink);
+        }
+        .user-invoice-item-qty {
+            color: var(--muted);
+            font-size: .8rem;
+        }
+        .user-invoice-item-price {
+            font-weight: 700;
+            color: var(--wine-700);
+            font-family: 'Montserrat', sans-serif;
+        }
+
+        .admin-gate-card {
+            background: linear-gradient(135deg, var(--blush-100), #fff);
+            border: 1.5px solid var(--blush-200);
+            border-radius: var(--radius-lg);
+            padding: 18px;
+            text-align: center;
+            margin-top: 28px;
+            transition: box-shadow .2s;
+        }
+        .admin-gate-card:hover {
+            box-shadow: var(--shadow-m);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: var(--radius-xl);
+            box-shadow: var(--shadow-s);
+        }
+        .empty-state-icon {
+            font-size: 3rem;
+            margin-bottom: 14px;
+        }
+        .empty-state-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--ink);
+            margin-bottom: 6px;
+        }
+        .empty-state-desc {
+            font-size: .88rem;
+            color: var(--muted);
+            margin-bottom: 18px;
+        }
+
+        .section-title-wrapper {
+            text-align: center;
+            margin-bottom: 20px;
+            margin-top: 28px;
+        }
+        .section-title-wrapper h2 {
+            margin-bottom: 2px;
+        }
+        .section-title-wrapper p {
+            color: var(--muted);
+            font-size: .88rem;
+        }
+
+        .signout-section {
+            text-align: center;
+            margin-top: 32px;
+            padding: 20px 0;
+        }
+        .signout-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 32px;
+            border: 1.5px solid var(--line);
+            border-radius: 10px;
+            background: #fff;
+            color: var(--muted);
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 700;
+            font-size: .82rem;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .signout-btn:hover {
+            border-color: #c0392b;
+            color: #c0392b;
+            background: #fef0f0;
+            transform: translateY(-1px);
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 32px; height: 32px;
+            border: 3px solid var(--line);
+            border-top-color: var(--wine-700);
+            border-radius: 50%;
+            animation: spin .7s linear infinite;
+            margin-bottom: 14px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .login-hero {
+            background: linear-gradient(145deg, var(--wine-900) 0%, var(--wine-700) 100%);
+            border-radius: var(--radius-xl);
+            padding: 36px 24px;
+            text-align: center;
+            margin-top: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        .login-hero::before {
+            content: '';
+            position: absolute;
+            width: 280px; height: 280px;
+            border-radius: 50%;
+            top: -100px; right: -80px;
+            background: rgba(255,255,255,.06);
+            pointer-events: none;
+        }
+        @media (max-width: 560px) {
+            .user-profile-hero { padding: 28px 16px 24px; }
+            .user-avatar-frame { width: 72px; height: 72px; }
+            .user-name { font-size: 1.25rem; }
+            .user-stats-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .user-stat-card { padding: 14px 10px; }
+            .user-stat-value { font-size: 1.1rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="promo-bar">Ofertas exclusivas para clientes registrados</div>
+
+    <header>
+        <div class="logo-container">
+            <img src="https://i.imgur.com/vscZKK3.png" alt="Logo D&J Beauty Studio">
+            <div class="brand-copy">
+                <h3>D&J Beauty Studio</h3>
+                <p>Tu cuenta personalizada</p>
+            </div>
+        </div>
+        <button id="user-panel-btn" class="user-panel-btn" aria-label="Mi cuenta" title="Mi cuenta">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M20 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M4 21v-2a4 4 0 0 1 3-3.87"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+        </button>
+    </header>
+
+    <nav>
+        <a href="index.html">Inicio</a>
+        <a href="productos.html">Productos</a>
+        <a href="ofertas.html">Ofertas</a>
+        <a href="staff.html">Staff</a>
+        <a href="usuario.html" class="active">Mi Cuenta</a>
+    </nav>
+
+    <div class="container">
+
+        <div id="user-page-content">
+            <div style="text-align:center;padding:60px 0;color:var(--muted)">
+                <div class="loading-spinner"></div>
+                <p style="font-size:.95rem">Cargando tu perfil...</p>
+            </div>
+        </div>
+
+    </div>
+
+    <footer>
+        <p>&copy; 2026 D&J Beauty Studio.</p>
+        <p>Tu estilo, tu esencia, tu beauty studio.</p>
+    </footer>
+
+    <div class="floating-social" aria-hidden="false">
+        <a class="social-link tiktok" href="https://www.tiktok.com/@19beautystudiodj" target="_blank" rel="noopener noreferrer" aria-label="TikTok 19beautystudiodj">
+            <img src="https://i.imgur.com/4QYSxp8.png" alt="TikTok 19beautystudiodj">
+        </a>
+        <a class="social-link instagram" href="https://www.instagram.com/19beautudio_dj/" target="_blank" rel="noopener noreferrer" aria-label="Instagram 19beautudio_dj">
+            <img src="https://i.imgur.com/ihD6vQe.png" alt="Instagram 19beautudio_dj">
+        </a>
+    </div>
+
+    <script src="firebase-config.js"></script>
+    <script src="script.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function(){
+        var pageContent = document.getElementById('user-page-content');
+
+        function esc(t){ return (t||'').replace(/[&"'<>]/g,function(a){return {'&':'&amp;','"':'&quot;',"'":'&#39;','<':'&lt;','>':'&gt;'}[a];}); }
+
+        function cop(n){ return '$' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
+
+        function mostrarUsuario(user, invoices){
+            var isAdmin = (user.email||'').toLowerCase() === 'beautystudiodj@gmail.com';
+            var name = user.displayName || user.email || 'Usuario';
+            var photo = user.photoURL || '';
+            var email = user.email || '';
+            var uid = user.uid;
+
+            var confirmed = invoices.filter(function(i){ return i.status === 'confirmed'; });
+            var totalGastado = confirmed.reduce(function(s,i){ return s + (Number(i.total)||Number(i.subtotal)||0); }, 0);
+            var unidades = confirmed.reduce(function(s,i){ return s + (i.items||[]).reduce(function(a,it){ return a + (Number(it.qty)||1); },0); },0);
+            var ultimaFecha = invoices.length
+                ? new Date(invoices[0].createdAt||Date.now()).toLocaleDateString('es-CO',{day:'2-digit',month:'long',year:'numeric'})
+                : '—';
+
+            var h = '';
+
+            // ── Profile Hero ──
+            h += '<div class="user-profile-hero fade-up">';
+            h += '<div class="user-avatar-frame">';
+            if (photo) {
+                h += '<img src="' + esc(photo) + '" alt="Foto de perfil">';
+            } else {
+                h += '<div class="avatar-placeholder">' + esc((name[0]||'').toUpperCase()) + '</div>';
+            }
+            h += '</div>';
+            h += '<h1 class="user-name">' + esc(name) + '</h1>';
+            h += '<p class="user-email">' + esc(email) + '</p>';
+            h += '<p class="user-joined">Miembro desde ' + ultimaFecha + '</p>';
+            h += '</div>';
+
+            // ── Stats ──
+            h += '<div class="user-stats-grid fade-up delay-1">';
+            h += '<div class="user-stat-card"><div class="user-stat-icon">💰</div><div class="user-stat-value">' + cop(totalGastado) + '</div><div class="user-stat-label">Total Gastado</div></div>';
+            h += '<div class="user-stat-card"><div class="user-stat-icon">🧾</div><div class="user-stat-value">' + invoices.length + '</div><div class="user-stat-label">Factura' + (invoices.length!==1?'s':'') + '</div></div>';
+            h += '<div class="user-stat-card"><div class="user-stat-icon">✅</div><div class="user-stat-value">' + confirmed.length + '</div><div class="user-stat-label">Confirmada' + (confirmed.length!==1?'s':'') + '</div></div>';
+            h += '<div class="user-stat-card"><div class="user-stat-icon">📦</div><div class="user-stat-value">' + unidades + '</div><div class="user-stat-label">Unidades</div></div>';
+            h += '</div>';
+
+            // ── Admin Gate ──
+            if (isAdmin) {
+                h += '<div class="admin-gate-card fade-up delay-2">';
+                h += '<p style="font-weight:700;color:var(--wine-700);margin:0 0 4px;font-size:.95rem">👑 Administrador del sitio</p>';
+                h += '<p style="font-size:.8rem;color:var(--muted);margin:0 0 14px">Accede al panel de administración para gestionar productos, facturas y más.</p>';
+                h += '<button id="admin-page-gate-btn" class="btn" style="width:100%">Acceder al Panel</button>';
+                h += '<div id="admin-page-password-area" style="display:none;margin-top:12px;text-align:left">';
+                h += '<input id="admin-page-password-input" type="password" placeholder="Ingresa la contraseña de administrador" style="width:100%;padding:12px 14px;border-radius:10px;border:1.5px solid var(--line);font-size:.92rem;margin-bottom:10px" />';
+                h += '<button id="admin-page-login-submit" class="btn" style="width:100%">Ingresar</button>';
+                h += '<div id="admin-page-password-error" style="color:#c0392b;font-size:.85rem;margin-top:8px;display:none;font-weight:600"></div>';
+                h += '</div></div>';
+            }
+
+            // ── Invoices ──
+            h += '<div class="section-title-wrapper fade-up delay-2"><h2>Mis Compras</h2><p>Historial de facturas generadas desde tu carrito.</p></div>';
+
+            if (invoices.length === 0) {
+                h += '<div class="empty-state fade-up delay-2">';
+                h += '<div class="empty-state-icon">🛍️</div>';
+                h += '<div class="empty-state-title">Aún no has realizado compras</div>';
+                h += '<div class="empty-state-desc">Cuando generes una factura desde el carrito, aparecerá aquí con todos los detalles.</div>';
+                h += '<a href="productos.html" class="btn">Ir a comprar</a>';
+                h += '</div>';
+            } else {
+                h += '<div style="display:flex;flex-direction:column;gap:12px">';
+                invoices.forEach(function(inv){
+                    var total = cop(inv.total||inv.subtotal||0);
+                    var date = new Date(inv.createdAt||Date.now()).toLocaleString('es-CO',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+                    var badgeCls = inv.status === 'confirmed' ? 'badge-confirmed' : 'badge-pending';
+                    var badgeText = inv.status === 'confirmed' ? 'Confirmada' : 'Pendiente';
+                    var itemsHtml = (inv.items||[]).map(function(it){
+                        var qty = Number(it.qty)||1;
+                        var st = cop((Number(it.unitPrice)||0)*qty);
+                        return '<div class="user-invoice-item"><span class="user-invoice-item-name">' + esc(it.name||'') + (qty>1?' <span class="user-invoice-item-qty">×' + qty + '</span>':'') + '</span><span class="user-invoice-item-price">' + st + '</span></div>';
+                    }).join('');
+
+                    h += '<div class="user-invoice-card fade-up">';
+                    h += '<div class="user-invoice-header">';
+                    h += '<div><div class="user-invoice-id">#' + esc(inv.id) + '</div><div class="user-invoice-date">' + date + '</div></div>';
+                    h += '<div style="display:flex;align-items:center;gap:10px"><span class="user-invoice-badge ' + badgeCls + '">' + badgeText + '</span><span class="user-invoice-total">' + total + '</span></div>';
+                    h += '</div>';
+                    h += itemsHtml;
+                    h += '</div>';
+                });
+                h += '</div>';
+            }
+
+            // ── Sign Out ──
+            h += '<div class="signout-section fade-up delay-3"><button id="user-page-signout" class="signout-btn">Cerrar sesión</button></div>';
+
+            pageContent.innerHTML = h;
+
+            // Admin gate
+            var adminBtn = document.getElementById('admin-page-gate-btn');
+            if (adminBtn) {
+                adminBtn.addEventListener('click', function(){
+                    var area = document.getElementById('admin-page-password-area');
+                    area.style.display = area.style.display === 'none' ? 'block' : 'none';
+                });
+            }
+            var adminSubmit = document.getElementById('admin-page-login-submit');
+            if (adminSubmit) {
+                adminSubmit.addEventListener('click', function(){
+                    var pw = document.getElementById('admin-page-password-input').value.trim();
+                    var err = document.getElementById('admin-page-password-error');
+                    if (pw === 'admin123') {
+                        sessionStorage.setItem('admin_authed','1');
+                        window.location.href = 'admin/index.html';
+                    } else {
+                        err.textContent = 'Contraseña incorrecta';
+                        err.style.display = 'block';
+                    }
+                });
+            }
+
+            // Sign out
+            var signOutBtn = document.getElementById('user-page-signout');
+            if (signOutBtn) {
+                signOutBtn.addEventListener('click', async function(){
+                    var a = window.__FIRESTORE_AUTH__;
+                    if (a) await a.signOut();
+                    pageContent.innerHTML = '<div style="text-align:center;padding:60px 0;color:var(--muted)"><div style="font-size:3rem;margin-bottom:14px">👋</div><p style="font-size:1.05rem;font-weight:600;color:var(--ink);margin-bottom:4px">Sesión cerrada</p><p style="font-size:.88rem;margin-bottom:18px">Gracias por visitarnos. Vuelve pronto.</p><a href="usuario.html" class="btn">Volver a iniciar sesión</a></div>';
+                });
+            }
+        }
+
+        function mostrarLogin(){
+            pageContent.innerHTML = '<div class="login-hero fade-up"><div style="font-size:2.5rem;margin-bottom:14px">🔐</div><h1 style="color:#fff;margin:0 0 6px;font-size:1.6rem">Mi Cuenta</h1><p style="color:rgba(255,255,255,.85);font-size:.95rem;margin:0 auto 4px;max-width:400px">Inicia sesión para ver tus compras y acceder a promociones exclusivas.</p><p style="color:rgba(255,255,255,.55);font-size:.8rem;margin-bottom:24px">No es necesario para comprar, solo para beneficios adicionales.</p><button id="page-google-signin" class="btn" style="display:inline-flex;align-items:center;gap:10px;padding:14px 28px;background:#4285f4;border-radius:12px;font-size:.9rem;box-shadow:0 4px 16px rgba(66,133,244,.35)"><svg viewBox="0 0 24 24" width="20" height="20" style="flex-shrink:0"><path fill="#fff" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/><path fill="#fff" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#fff" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#fff" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>Continuar con Google</button><div id="page-login-error" style="color:#ffb3b3;font-size:.85rem;margin-top:14px;display:none;background:rgba(255,255,255,.1);padding:10px 14px;border-radius:8px"></div></div>';
+
+            var g = document.getElementById('page-google-signin');
+            var e = document.getElementById('page-login-error');
+            if (g) {
+                g.addEventListener('click', async function(){
+                    var a = window.__FIRESTORE_AUTH__;
+                    if (!a) { e.textContent='Servicio no disponible. Intenta de nuevo.'; e.style.display='block'; return; }
+                    try {
+                        var p = new window.firebase.auth.GoogleAuthProvider();
+                        await a.signInWithRedirect(p);
+                    } catch(err) { e.textContent='Error: '+err.message; e.style.display='block'; }
+                });
+            }
+        }
+
+        function mostrarCargando(){
+            pageContent.innerHTML = '<div style="text-align:center;padding:60px 0;color:var(--muted)"><div class="loading-spinner"></div><p style="font-size:.95rem">Cargando tu perfil...</p></div>';
+        }
+
+        function mostrarError(m){
+            pageContent.innerHTML = '<div style="text-align:center;padding:60px 0">' +
+                '<div style="width:48px;height:48px;border-radius:50%;background:#fef0f0;display:inline-flex;align-items:center;justify-content:center;font-size:1.4rem;margin-bottom:14px">⚠️</div>' +
+                '<p style="color:var(--muted);font-size:.95rem;max-width:360px;margin:0 auto 18px">' + esc(m) + '</p>' +
+                '<button id="retry-page-btn" class="btn">Reintentar</button></div>';
+            var r = document.getElementById('retry-page-btn');
+            if (r) r.addEventListener('click', function(){ location.reload(); });
+        }
+
+        // Main
+        (async function initPage(){
+            mostrarCargando();
+            try {
+                var ok = await Promise.race([
+                    (window.waitForFirestore?window.waitForFirestore(5000):Promise.resolve(false)),
+                    new Promise(function(r){setTimeout(function(){r(false);},4000);})
+                ]);
+                var auth = window.__FIRESTORE_AUTH__;
+                var db = window.__FIRESTORE_DB__;
+                if (!ok || !auth || !db) { mostrarError('El servicio no está disponible. Verifica tu conexión e intenta de nuevo.'); return; }
+                var user = auth.currentUser;
+                if (!user) { mostrarLogin(); return; }
+                var invoices = [];
+                try {
+                    var snap = await db.collection('invoices').where('uid','==',user.uid).get();
+                    invoices = snap.docs.map(function(d){ return Object.assign({id:d.id},d.data()); });
+                    invoices.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+                } catch(e){
+                    try {
+                        var snap2 = await db.collection('invoices').get();
+                        invoices = snap2.docs.map(function(d){ return Object.assign({id:d.id},d.data()); }).filter(function(i){ return i.uid === user.uid; });
+                        invoices.sort(function(a,b){ return (b.createdAt||0)-(a.createdAt||0); });
+                    } catch(e2){}
+                }
+                mostrarUsuario(user, invoices);
+            } catch(e) { mostrarError('Error al cargar: '+(e.message||'desconocido')); }
+        })();
+    });
+    </script>
+</body>
+</html>
