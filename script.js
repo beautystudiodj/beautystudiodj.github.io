@@ -244,6 +244,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function escapeHtml(text) {
         return (text || '').replace(/[&"'<>]/g, function (a) { return {'&':'&amp;','"':'&quot;',"'":'&#39;','<':'&lt;','>':'&gt;'}[a]; });
     }
+    window.__escapeHtml = escapeHtml;
 
     // Returns the computed discounted price for a product (uses `discountPercentage` when present)
     function getDiscountedPrice(p){
@@ -2145,8 +2146,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateCartDisplay() {
+        if (!cartPanel) return; // page without cart UI
         const totalUnits = cart.reduce((s, it) => s + (Number(it.qty) || 1), 0);
-        cartCountEl.innerText = totalUnits;
+        if (cartCountEl) cartCountEl.innerText = totalUnits;
         cartItemsContainer.innerHTML = '';
         if (cart.length === 0) {
             cartItemsContainer.innerHTML = '<p class="cart-empty" style="color:#666">Tu carrito está vacío.</p>';
@@ -2248,7 +2250,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function showCartTemporarily() {
         if (!cartPanel) return;
         cartPanel.classList.add('show');
-        cartPanel.setAttribute('aria-hidden', 'false');
+        if (cartPanel.setAttribute) cartPanel.setAttribute('aria-hidden', 'false');
         // ensure keyboard focus lands on close button for accessibility
         try { if (cartClose) cartClose.focus(); } catch(e){}
     }
@@ -2860,8 +2862,9 @@ function initUserPanelUI(){
         function updateUserBtnIcon(){
             const auth = window.__FIRESTORE_AUTH__;
             const u = auth ? auth.currentUser : null;
+            const _esc = window.__escapeHtml || function(t){return t||'';};
             if (u && u.photoURL){
-                btn.innerHTML = `<img src="${escapeHtml(u.photoURL)}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover" />`;
+                btn.innerHTML = `<img src="${_esc(u.photoURL)}" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover" />`;
                 btn.style.border = '2px solid #25D366';
             } else {
                 btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-3-3.87"></path><path d="M4 21v-2a4 4 0 0 1 3-3.87"></path><circle cx="12" cy="7" r="4"></circle></svg>`;
